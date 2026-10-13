@@ -12,12 +12,26 @@ HTML_HEADERS = {
 }
 
 
+_client: httpx.AsyncClient | None = None
+
+
+def get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(
+            timeout=20.0,
+            limits=httpx.Limits(max_keepalive_connections=80, max_connections=120, keepalive_expiry=60.0),
+            follow_redirects=True,
+        )
+    return _client
+
+
 async def fetch_text(url: str, headers: dict | None = None, timeout: float = 20.0) -> str:
     h = dict(HTML_HEADERS)
     if headers:
         h.update(headers)
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-        res = await client.get(url, headers=h)
+    client = get_client()
+    res = await client.get(url, headers=h, timeout=timeout)
     if res.status_code != 200:
         raise RuntimeError(f"HTTP {res.status_code} fetching {url}")
     return res.text
@@ -27,8 +41,8 @@ async def fetch_json(url: str, headers: dict | None = None, timeout: float = 20.
     h = {"User-Agent": UA, "Accept": "application/json"}
     if headers:
         h.update(headers)
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-        res = await client.get(url, headers=h)
+    client = get_client()
+    res = await client.get(url, headers=h, timeout=timeout)
     if res.status_code != 200:
         raise RuntimeError(f"HTTP {res.status_code} fetching {url}")
     return res.json()

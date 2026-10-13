@@ -61,6 +61,28 @@ def _norm_url(url: str) -> str | None:
     return None
 
 
+_proxy_client: httpx.AsyncClient | None = None
+
+
+def get_proxy_client() -> httpx.AsyncClient:
+    global _proxy_client
+    if _proxy_client is None or _proxy_client.is_closed:
+        _proxy_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=6.0, read=30.0, write=10.0, pool=30.0),
+            limits=httpx.Limits(max_keepalive_connections=100, max_connections=150, keepalive_expiry=120.0),
+            verify=False,
+            follow_redirects=True,
+        )
+    return _proxy_client
+
+
+@app.on_event("shutdown")
+async def shutdown_proxy_client():
+    global _proxy_client
+    if _proxy_client and not _proxy_client.is_closed:
+        await _proxy_client.aclose()
+
+
 @app.get("/proxy_m3u8")
 async def proxy_m3u8(url: str, referer: str = "", audio: str = "sub"):
     url = _norm_url(url)
@@ -69,109 +91,109 @@ async def proxy_m3u8(url: str, referer: str = "", audio: str = "sub"):
                         media_type="application/json")
     audio = (audio or "sub").lower()
     try:
-        async with httpx.AsyncClient(timeout=15.0, verify=False, follow_redirects=True) as client:
-            h = HEADERS.copy()
-            if referer:
-                h["Referer"] = referer
-                try:
-                    p = urlparse(referer)
-                    if p.scheme and p.netloc:
-                        h["Origin"] = f"{p.scheme}://{p.netloc}"
-                except Exception:
-                    pass
+        client = get_proxy_client()
+        h = HEADERS.copy()
+        if referer:
+            h["Referer"] = referer
+            try:
+                p = urlparse(referer)
+                if p.scheme and p.netloc:
+                    h["Origin"] = f"{p.scheme}://{p.netloc}"
+            except Exception:
+                pass
 
-            log_info(f"Fetching m3u8 playlist ({audio}): {url[:85]}", tag="PROXY")
-            resp = await client.get(url, headers=h)
-            if resp.status_code != 200:
-                log_warn(f"Upstream m3u8 returned status {resp.status_code} for {url[:85]}", tag="PROXY")
-                return Response(content=resp.content, status_code=resp.status_code, media_type="text/plain")
+        log_info(f"Fetching m3u8 playlist ({audio}): {url[:85]}", tag="PROXY")
+        resp = await client.get(url, headers=h)
+        if resp.status_code != 200:
+            log_warn(f"Upstream m3u8 returned status {resp.status_code} for {url[:85]}", tag="PROXY")
+            return Response(content=resp.content, status_code=resp.status_code, media_type="text/plain")
 
-            content = resp.text
-            lines = []
-            from urllib.parse import quote, urljoin
-            import re
+        content = resp.text
+        lines = []
+        from urllib.parse import quote, urljoin
+        import re
 
-            is_variant = False
-            has_explicit_eng = bool(re.search(r'#EXT-X-MEDIA:TYPE=AUDIO[^\n]*(?:NAME="[^"]*(?:english|dub)|LANGUAGE="(?:eng|en)")', content, re.I))
-            has_explicit_jpn = bool(re.search(r'#EXT-X-MEDIA:TYPE=AUDIO[^\n]*(?:NAME="[^"]*(?:japanese|jap|sub)|LANGUAGE="(?:jpn|ja)")', content, re.I))
-            default_audio_set = False
+        is_variant = False
+        has_explicit_eng = bool(re.search(r'#EXT-X-MEDIA:TYPE=AUDIO[^\n]*(?:NAME="[^"]*(?:english|dub)|LANGUAGE="(?:eng|en)")', content, re.I))
+        has_explicit_jpn = bool(re.search(r'#EXT-X-MEDIA:TYPE=AUDIO[^\n]*(?:NAME="[^"]*(?:japanese|jap|sub)|LANGUAGE="(?:jpn|ja)")', content, re.I))
+        default_audio_set = False
 
-            for line in content.split('\n'):
-                stripped = line.strip()
-                if not stripped:
-                    lines.append(line)
-                    continue
-
-                if stripped.startswith('#EXT-X-STREAM-INF') or stripped.startswith('#EXT-X-I-FRAME-STREAM-INF'):
-                    is_variant = True
-                    lines.append(line)
-                    continue
-
-                if stripped.startswith('#EXT-X-MEDIA'):
-                    media_line = stripped
-                    if 'TYPE=AUDIO' in media_line:
-                        is_eng = bool(re.search(r'NAME="[^"]*(?:english|dub)', media_line, re.I) or re.search(r'LANGUAGE="(?:eng|en)"', media_line, re.I))
-                        is_jpn = bool(re.search(r'NAME="[^"]*(?:japanese|jap|sub)', media_line, re.I) or re.search(r'LANGUAGE="(?:jpn|ja)"', media_line, re.I))
-
-                        media_line = re.sub(r',?DEFAULT=(?:YES|NO)', '', media_line)
-                        media_line = re.sub(r',?AUTOSELECT=(?:YES|NO)', '', media_line)
-
-                        if audio == "dub":
-                            if has_explicit_eng:
-                                if is_eng and not default_audio_set:
-                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=YES,AUTOSELECT=YES')
-                                    default_audio_set = True
-                                else:
-                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=NO,AUTOSELECT=NO')
-                            else:
-                                if not default_audio_set:
-                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=YES,AUTOSELECT=YES')
-                                    default_audio_set = True
-                                else:
-                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=NO,AUTOSELECT=NO')
-                        else:  # sub
-                            if has_explicit_jpn:
-                                if is_jpn and not default_audio_set:
-                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=YES,AUTOSELECT=YES')
-                                    default_audio_set = True
-                                elif is_eng:
-                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=NO,AUTOSELECT=NO')
-                            else:
-                                if not default_audio_set:
-                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=YES,AUTOSELECT=YES')
-                                    default_audio_set = True
-                                else:
-                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=NO,AUTOSELECT=NO')
-
-                    media_uri_match = re.search(r'URI="([^"]+)"', media_line)
-                    if media_uri_match:
-                        sub_url = urljoin(url, media_uri_match.group(1))
-                        proxied_sub = f"/proxy_m3u8?url={quote(sub_url, safe='')}&referer={quote(referer, safe='')}&audio={quote(audio, safe='')}"
-                        media_line = media_line.replace(f'URI="{media_uri_match.group(1)}"', f'URI="{proxied_sub}"')
-                    lines.append(media_line)
-                    continue
-
-                if stripped.startswith('#EXT-X-KEY'):
-                    key_match = re.search(r'URI="([^"]+)"', stripped)
-                    if key_match:
-                        key_url = urljoin(url, key_match.group(1))
-                        proxied_key = f"/proxy_segment?url={quote(key_url, safe='')}&referer={quote(referer, safe='')}&audio={quote(audio, safe='')}"
-                        line = stripped.replace(f'URI="{key_match.group(1)}"', f'URI="{proxied_key}"')
-                    lines.append(line)
-                    continue
-
-                if not stripped.startswith('#'):
-                    absolute_url = urljoin(url, stripped)
-                    if is_variant or '.m3u8' in stripped:
-                        line = f"/proxy_m3u8?url={quote(absolute_url, safe='')}&referer={quote(referer, safe='')}&audio={quote(audio, safe='')}"
-                    else:
-                        line = f"/proxy_segment?url={quote(absolute_url, safe='')}&referer={quote(referer, safe='')}&audio={quote(audio, safe='')}"
-                    is_variant = False
-
+        for line in content.split('\n'):
+            stripped = line.strip()
+            if not stripped:
                 lines.append(line)
+                continue
 
-            log_info(f"M3U8 proxied successfully ({len(lines)} lines parsed)", tag="PROXY")
-            return Response(content='\n'.join(lines), media_type="application/vnd.apple.mpegurl")
+            if stripped.startswith('#EXT-X-STREAM-INF') or stripped.startswith('#EXT-X-I-FRAME-STREAM-INF'):
+                is_variant = True
+                lines.append(line)
+                continue
+
+            if stripped.startswith('#EXT-X-MEDIA'):
+                media_line = stripped
+                if 'TYPE=AUDIO' in media_line:
+                    is_eng = bool(re.search(r'NAME="[^"]*(?:english|dub)', media_line, re.I) or re.search(r'LANGUAGE="(?:eng|en)"', media_line, re.I))
+                    is_jpn = bool(re.search(r'NAME="[^"]*(?:japanese|jap|sub)', media_line, re.I) or re.search(r'LANGUAGE="(?:jpn|ja)"', media_line, re.I))
+
+                    media_line = re.sub(r',?DEFAULT=(?:YES|NO)', '', media_line)
+                    media_line = re.sub(r',?AUTOSELECT=(?:YES|NO)', '', media_line)
+
+                    if audio == "dub":
+                        if has_explicit_eng:
+                            if is_eng and not default_audio_set:
+                                media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=YES,AUTOSELECT=YES')
+                                default_audio_set = True
+                            else:
+                                media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=NO,AUTOSELECT=NO')
+                        else:
+                            if not default_audio_set:
+                                media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=YES,AUTOSELECT=YES')
+                                default_audio_set = True
+                            else:
+                                media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=NO,AUTOSELECT=NO')
+                    else:  # sub
+                        if has_explicit_jpn:
+                            if is_jpn and not default_audio_set:
+                                media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=YES,AUTOSELECT=YES')
+                                default_audio_set = True
+                            elif is_eng:
+                                media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=NO,AUTOSELECT=NO')
+                        else:
+                            if not default_audio_set:
+                                media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=YES,AUTOSELECT=YES')
+                                default_audio_set = True
+                            else:
+                                media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=NO,AUTOSELECT=NO')
+
+                media_uri_match = re.search(r'URI="([^"]+)"', media_line)
+                if media_uri_match:
+                    sub_url = urljoin(url, media_uri_match.group(1))
+                    proxied_sub = f"/proxy_m3u8?url={quote(sub_url, safe='')}&referer={quote(referer, safe='')}&audio={quote(audio, safe='')}"
+                    media_line = media_line.replace(f'URI="{media_uri_match.group(1)}"', f'URI="{proxied_sub}"')
+                lines.append(media_line)
+                continue
+
+            if stripped.startswith('#EXT-X-KEY'):
+                key_match = re.search(r'URI="([^"]+)"', stripped)
+                if key_match:
+                    key_url = urljoin(url, key_match.group(1))
+                    proxied_key = f"/proxy_segment?url={quote(key_url, safe='')}&referer={quote(referer, safe='')}&audio={quote(audio, safe='')}"
+                    line = stripped.replace(f'URI="{key_match.group(1)}"', f'URI="{proxied_key}"')
+                lines.append(line)
+                continue
+
+            if not stripped.startswith('#'):
+                absolute_url = urljoin(url, stripped)
+                if is_variant or '.m3u8' in stripped:
+                    line = f"/proxy_m3u8?url={quote(absolute_url, safe='')}&referer={quote(referer, safe='')}&audio={quote(audio, safe='')}"
+                else:
+                    line = f"/proxy_segment?url={quote(absolute_url, safe='')}&referer={quote(referer, safe='')}&audio={quote(audio, safe='')}"
+                is_variant = False
+
+            lines.append(line)
+
+        log_info(f"M3U8 proxied successfully ({len(lines)} lines parsed)", tag="PROXY")
+        return Response(content='\n'.join(lines), media_type="application/vnd.apple.mpegurl")
     except Exception as e:
         log_error(f"Error fetching m3u8: {e}", tag="PROXY", exc=e)
         return Response(content=f'{{"detail":"proxy_m3u8 error: {str(e)}"}}', status_code=502,
@@ -185,31 +207,32 @@ async def proxy_segment(url: str, referer: str = "", audio: str = "sub"):
         return Response(content='{"detail":"bad proxy url"}', status_code=400,
                         media_type="application/json")
     try:
-        async with httpx.AsyncClient(timeout=30.0, verify=False, follow_redirects=True) as client:
-            h = HEADERS.copy()
-            if referer:
-                h["Referer"] = referer
-                try:
-                    p = urlparse(referer)
-                    if p.scheme and p.netloc:
-                        h["Origin"] = f"{p.scheme}://{p.netloc}"
-                except Exception:
-                    pass
+        client = get_proxy_client()
+        h = HEADERS.copy()
+        if referer:
+            h["Referer"] = referer
+            try:
+                p = urlparse(referer)
+                if p.scheme and p.netloc:
+                    h["Origin"] = f"{p.scheme}://{p.netloc}"
+            except Exception:
+                pass
 
-            resp = await client.get(url, headers=h)
-            if resp.status_code == 403:
-                log_warn(f"Upstream segment 403 Forbidden: {url[:85]}", tag="PROXY")
-            elif resp.status_code != 200:
-                log_warn(f"Upstream segment status {resp.status_code}: {url[:85]}", tag="PROXY")
-            else:
-                log_info(f"Segment proxied: {len(resp.content)//1024} KB ({resp.status_code} OK)", tag="PROXY")
+        resp = await client.get(url, headers=h)
+        if resp.status_code == 403:
+            log_warn(f"Upstream segment 403 Forbidden: {url[:85]}", tag="PROXY")
+        elif resp.status_code != 200:
+            log_warn(f"Upstream segment status {resp.status_code}: {url[:85]}", tag="PROXY")
+        else:
+            log_info(f"Segment proxied: {len(resp.content)//1024} KB ({resp.status_code} OK)", tag="PROXY")
 
-            if resp.content.startswith(b"#EXTM3U"):
-                return await proxy_m3u8(url, referer, audio=audio)
-            media_type = resp.headers.get("content-type", "video/mp2t")
-            if "image" in media_type or "octet-stream" in media_type:
-                media_type = "video/mp2t"
-            return Response(content=resp.content, status_code=resp.status_code, media_type=media_type)
+        if resp.content.startswith(b"#EXTM3U"):
+            return await proxy_m3u8(url, referer, audio=audio)
+        media_type = resp.headers.get("content-type", "video/mp2t")
+        if "image" in media_type or "octet-stream" in media_type:
+            media_type = "video/mp2t"
+        resp_headers = {"Cache-Control": "public, max-age=86400, immutable"} if resp.status_code == 200 else None
+        return Response(content=resp.content, status_code=resp.status_code, media_type=media_type, headers=resp_headers)
     except httpx.HTTPError as e:
         log_error(f"Network error fetching segment: {e}", tag="PROXY")
         return Response(content=b"", status_code=502)
@@ -757,6 +780,11 @@ async def home():
                     if (hlsStream && Hls.isSupported()) {
                         const hls = new Hls({
                             maxBufferLength: 30,
+                            maxMaxBufferLength: 60,
+                            startFragPrefetch: true,
+                            enableWorker: true,
+                            lowLatencyMode: false,
+                            backBufferLength: 30,
                             xhrSetup: function(xhr, url) {
                                 if (url.startsWith('http') && !url.includes('127.0.0.1') && !url.includes('localhost')) {
                                     return;

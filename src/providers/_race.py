@@ -11,9 +11,9 @@ RANKING = [
     "miruro",
 ]
 
-WATCH_TIMEOUT = 75.0
-EPISODES_TIMEOUT = 60.0
-WATCH_CACHE_TTL = 45.0
+WATCH_TIMEOUT = 18.0
+EPISODES_TIMEOUT = 25.0
+WATCH_CACHE_TTL = 300.0
 
 _latency: dict = {}
 _ep_latency: dict = {}
@@ -124,13 +124,14 @@ async def race_watch(anilist_id: int, ep: int, audio: str = "sub",
                         winner = {"provider": name, "streams": streams}
                     elif embed_fallback is None:
                         embed_fallback = {"provider": name, "streams": streams}
-            # Once we find a winner with real HLS video, we can stop the race
+            # Once we find a winner with real HLS video, we can stop the race immediately
             if winner is not None:
                 break
     finally:
-        if pending:
+        # If no HLS winner was found yet, allow up to 1.5s for remaining tasks before fallback
+        if winner is None and pending and embed_fallback is not None:
             try:
-                done2, pending2 = await asyncio.wait(pending, timeout=6.0)
+                done2, pending2 = await asyncio.wait(pending, timeout=1.5)
                 for task in done2:
                     try:
                         name, streams, dt, ok, has_stream = task.result()
@@ -141,9 +142,11 @@ async def race_watch(anilist_id: int, ep: int, audio: str = "sub",
                     except Exception:
                         pass
                 pending = pending2
-            finally:
-                for task in pending:
-                    task.cancel()
+            except Exception:
+                pass
+        # Cancel all remaining background tasks immediately
+        for task in pending:
+            task.cancel()
     if winner is None and embed_fallback is not None:
         winner = embed_fallback
     if winner is None:
