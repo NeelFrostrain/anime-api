@@ -2,6 +2,7 @@ import httpx
 from fastapi import HTTPException
 from src.config import ANILIST_URL, iter_miruro_pipe_targets
 from src.parser import encode_pipe_request, decode_pipe_response, deep_translate
+from src.logger import log_info, log_warn
 
 
 async def anilist_query(query: str, variables: dict = None):
@@ -38,7 +39,7 @@ async def fetch_raw_episodes(anilist_id: int) -> dict:
     async with httpx.AsyncClient(timeout=15.0) as client:
         last_status = None
         for pipe_target, headers in iter_miruro_pipe_targets(encoded_req):
-            print(f"\n[KUHI API] executing pipe for raw episodes:", pipe_target)
+            log_info(f"Executing pipe for raw episodes: {pipe_target[:85]}", tag="PIPE")
             try:
                 res = await client.get(pipe_target, headers=headers)
                 last_status = res.status_code
@@ -47,6 +48,6 @@ async def fetch_raw_episodes(anilist_id: int) -> dict:
                     deep_translate(data)
                     return data
             except Exception as e:
-                print(f"[KUHI API] Failed to connect to {pipe_target}: {e}")
+                log_warn(f"Failed to connect to {pipe_target[:85]}: {e}", tag="PIPE")
 
         raise HTTPException(status_code=last_status or 502, detail="pipe request failed")

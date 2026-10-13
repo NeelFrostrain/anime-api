@@ -32,12 +32,12 @@ async def kaa_show_info(show_slug: str):
     return await fetch_json(f"{BASE}/api/show/{show_slug}")
 
 
-async def kaa_episode_page(show_slug: str, ep: int):
-    return await fetch_json(f"{BASE}/api/show/{show_slug}/episodes?ep={ep}&lang=ja-JP")
+async def kaa_episode_page(show_slug: str, ep: int, lang: str = "ja-JP"):
+    return await fetch_json(f"{BASE}/api/show/{show_slug}/episodes?ep={ep}&lang={lang}")
 
 
-async def kaa_all_episodes(show_slug: str) -> list:
-    first = await kaa_episode_page(show_slug, 1)
+async def kaa_all_episodes(show_slug: str, lang: str = "ja-JP") -> list:
+    first = await kaa_episode_page(show_slug, 1, lang=lang)
     first = first if isinstance(first, dict) else {}
     pages = first.get("pages") if isinstance(first.get("pages"), list) else []
     all_eps = list(first.get("result")) if isinstance(first.get("result"), list) else []
@@ -48,7 +48,7 @@ async def kaa_all_episodes(show_slug: str) -> list:
             start_ep = (eps or [None])[0]
             if not start_ep:
                 return []
-            d = await kaa_episode_page(show_slug, start_ep)
+            d = await kaa_episode_page(show_slug, start_ep, lang=lang)
             d = d if isinstance(d, dict) else {}
             return d.get("result") if isinstance(d.get("result"), list) else []
 
@@ -181,14 +181,14 @@ async def resolve_series(anilist_id: int, ctx: dict | None = None) -> dict:
     return data
 
 
-async def build_ep_map(show_slug: str, show_info: dict) -> list:
+async def build_ep_map(show_slug: str, show_info: dict, lang: str = "ja-JP") -> list:
     show_info = show_info if isinstance(show_info, dict) else {}
     if show_info.get("type") == "movie":
         m = re.search(r"/(ep-(\d+)-([a-f0-9]+))$", show_info.get("watch_uri") or "", re.IGNORECASE)
         if m:
             return [{"number": 1, "fullSlug": m.group(1)}]
         return []
-    episodes = await kaa_all_episodes(show_slug)
+    episodes = await kaa_all_episodes(show_slug, lang=lang)
     out = []
     for e in episodes:
         if not isinstance(e, dict):
@@ -218,14 +218,20 @@ async def get_episodes(anilist_id: int, ctx: dict | None = None) -> dict:
     locales = show_info.get("locales") if isinstance(show_info.get("locales"), list) else series.get("locales")
     has_dub = "en-US" in (locales or [])
 
-    ep_map = await build_ep_map(series["slug"], show_info)
-    if not ep_map:
+    ep_map_sub = await build_ep_map(series["slug"], show_info, lang="ja-JP")
+    ep_map_dub = await build_ep_map(series["slug"], show_info, lang="en-US") if has_dub else []
+    if not ep_map_sub and ep_map_dub:
+        ep_map_sub = ep_map_dub
+    elif not ep_map_dub and has_dub:
+        ep_map_dub = ep_map_sub
+
+    if not ep_map_sub:
         raise RuntimeError(f"KAA: no episodes found for AniList {anilist_id} (slug: {series['slug']})")
 
     expected = expected_count(media, ctx.get("anizip"))
     sub, dub = [], []
 
-    for ep in ep_map:
+    for ep in ep_map_sub:
         num = _norm_num(ep.get("number"))
         if not isinstance(num, (int, float)) or isinstance(num, bool) or not num >= 1:
             continue
@@ -244,8 +250,26 @@ async def get_episodes(anilist_id: int, ctx: dict | None = None) -> dict:
             "sourceNumber": num,
         }
         sub.append({"id": f"watch/{NAME}/{anilist_id}/sub/{NAME}-{num}", **base, "audio": "sub"})
-        if has_dub:
-            dub.append({"id": f"watch/{NAME}/{anilist_id}/dub/{NAME}-{num}", **base, "audio": "dub"})
+
+    for ep in ep_map_dub:
+        num = _norm_num(ep.get("number"))
+        if not isinstance(num, (int, float)) or isinstance(num, bool) or not num >= 1:
+            continue
+        if expected and num > expected:
+            continue
+        meta = episode_meta(num, ctx)
+        base = {
+            "number": num,
+            "title": meta["title"] or ep.get("title") or f"Episode {num}",
+            "duration": meta["duration"] if meta["duration"] is not None else ep.get("duration"),
+            "filler": meta["filler"],
+            "uncensored": False,
+            "description": meta["description"],
+            "image": meta["image"],
+            "airDate": meta["airDate"],
+            "sourceNumber": num,
+        }
+        dub.append({"id": f"watch/{NAME}/{anilist_id}/dub/{NAME}-{num}", **base, "audio": "dub"})
 
     return {
         "meta": {
@@ -270,14 +294,18 @@ async def watch(anilist_id: int, audio: str, ep: int, ctx: dict | None = None) -
     if audio == "dub" and "en-US" not in (locales or []):
         raise RuntimeError(f"KAA: no English dub for AniList {anilist_id}")
 
-    ep_map = await build_ep_map(series["slug"], show_info)
+    target_lang = "en-US" if audio == "dub" else "ja-JP"
+    ep_map = await build_ep_map(series["slug"], show_info, lang=target_lang)
+    if not ep_map and audio == "dub":
+        ep_map = await build_ep_map(series["slug"], show_info, lang="ja-JP")
+
     try:
         target = int(ep)
     except (TypeError, ValueError):
         target = None
     found = next((e for e in ep_map if e.get("number") == target), None)
     if not found:
-        raise RuntimeError(f"KAA: episode {ep} not found for AniList {anilist_id}")
+        raise RuntimeError(f"KAA: episode {ep} not found for AniList {anilist_id} ({audio})")
 
     episode_data = await kaa_episode_servers(series["slug"], found["fullSlug"])
     episode_data = episode_data if isinstance(episode_data, dict) else {}

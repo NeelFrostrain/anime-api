@@ -147,3 +147,22 @@ def get_log_stats() -> dict:
     if stats["errors_log"]["exists"]:
         stats["errors_log"]["size_kb"] = round(os.path.getsize(ERROR_LOG_PATH) / 1024, 2)
     return stats
+
+
+class EndpointFilter(logging.Filter):
+    """Filter out noisy repetitive poll requests like /logs/raw and static assets."""
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(p in msg for p in ("/logs/raw", "/logs/stats", "/logs?", "GET /logs HTTP"))
+
+
+def silence_uvicorn_access_spam():
+    """Silences noisy uvicorn access stdout logs while allowing our unified logger to handle HTTP requests."""
+    access_logger = logging.getLogger("uvicorn.access")
+    access_logger.addFilter(EndpointFilter())
+    for h in access_logger.handlers:
+        h.addFilter(EndpointFilter())
+    # Silence default uvicorn.access stdout so our middleware can log cleanly
+    access_logger.propagate = False
+    access_logger.setLevel(logging.WARNING)
+

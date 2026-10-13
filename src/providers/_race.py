@@ -3,7 +3,7 @@ import importlib
 import time
 
 from src.providers._media import build_ctx
-from src.logger import log_info, log_debug
+from src.logger import log_info, log_debug, log_warn
 
 RANKING = [
     "aniwaves", "anikoto", "anizone", "kaa", "anineko",
@@ -24,7 +24,7 @@ def _load(name):
     try:
         return importlib.import_module(f"src.providers.{name}")
     except Exception as e:
-        print(f"[RACE] provider {name} unavailable: {e}")
+        log_warn(f"Provider {name} unavailable: {e}", tag="RACE")
         return None
 
 
@@ -64,7 +64,8 @@ async def _watch_one(mod, name, anilist_id, ep, audio, ctx):
     key = (name, anilist_id, ep, audio)
     hit = _watch_cache.get(key)
     if hit and hit[0] > time.time():
-        return name, hit[1], 0.0, True
+        has_stream = any(s.get("type") in ("hls", "mp4") for s in hit[1])
+        return name, hit[1], 0.0, True, has_stream
     t0 = time.time()
     try:
         streams = await asyncio.wait_for(mod.watch(anilist_id, audio, ep, ctx), WATCH_TIMEOUT)
@@ -77,11 +78,12 @@ async def _watch_one(mod, name, anilist_id, ep, audio, ctx):
                 and "flixcloud.cc" not in s.get("url", "")
             ]
             if valid_streams:
+                has_stream = any(s.get("type") in ("hls", "mp4") for s in valid_streams)
                 _watch_cache[key] = (time.time() + WATCH_CACHE_TTL, valid_streams)
-                return name, valid_streams, dt, True
-        return name, None, dt, False
+                return name, valid_streams, dt, True, has_stream
+        return name, None, dt, False, False
     except Exception as e:
-        return name, None, round(time.time() - t0, 3), False
+        return name, None, round(time.time() - t0, 3), False, False
 
 
 async def race_watch(anilist_id: int, ep: int, audio: str = "sub",
@@ -93,7 +95,7 @@ async def race_watch(anilist_id: int, ep: int, audio: str = "sub",
     if preferred:
         pick = next((m for m in mods if m[0] == preferred), None)
         if pick is not None:
-            name, streams, dt, ok = await _watch_one(pick[1], pick[0], anilist_id, ep, audio, ctx)
+            name, streams, dt, ok, has_stream = await _watch_one(pick[1], pick[0], anilist_id, ep, audio, ctx)
             record_latency(name, dt, ok)
             if ok:
                 return {"provider": name, "streams": streams,
@@ -108,33 +110,41 @@ async def race_watch(anilist_id: int, ep: int, audio: str = "sub",
                for name, mod in mods}
     timings: dict = {}
     winner = None
+    embed_fallback = None
     try:
         while pending:
             done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
-                name, streams, dt, ok = task.result()
+                name, streams, dt, ok, has_stream = task.result()
                 timings[name] = {"seconds": dt, "ok": ok}
                 record_latency(name, dt, ok)
-                if ok and winner is None:
-                    winner = {"provider": name, "streams": streams}
+                if ok:
+                    if has_stream and winner is None:
+                        winner = {"provider": name, "streams": streams}
+                    elif embed_fallback is None:
+                        embed_fallback = {"provider": name, "streams": streams}
+            # Once we find a winner with real HLS video, we can stop the race
             if winner is not None:
                 break
     finally:
-
         if pending:
             try:
-                done2, pending2 = await asyncio.wait(pending, timeout=8.0)
+                done2, pending2 = await asyncio.wait(pending, timeout=6.0)
                 for task in done2:
                     try:
-                        name, streams, dt, ok = task.result()
+                        name, streams, dt, ok, has_stream = task.result()
                         timings[name] = {"seconds": dt, "ok": ok}
                         record_latency(name, dt, ok)
+                        if ok and winner is None and has_stream:
+                            winner = {"provider": name, "streams": streams}
                     except Exception:
                         pass
                 pending = pending2
             finally:
                 for task in pending:
                     task.cancel()
+    if winner is None and embed_fallback is not None:
+        winner = embed_fallback
     if winner is None:
         log_info(f"No winning provider found for AniList {anilist_id} Ep {ep}", tag="RACE")
         return None

@@ -1108,8 +1108,8 @@ def eval_crypto_chunk(chunk: str):
         config = _emulated_fragment_config(chunk)
         if config:
             return config
-    except Exception as e:
-        print(f"[mkissa] emulated discovery failed: {str(e)[:150]}")
+    except Exception:
+        pass
     try:
         config = eval_fragment_crypto_chunk(chunk)
         if config:

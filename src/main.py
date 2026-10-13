@@ -1,14 +1,20 @@
-from fastapi import FastAPI, Query
+import os
+import time
+from urllib.parse import urlparse
+import httpx
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, Response, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from urllib.parse import urlparse
-import httpx
-import os
 
 from src.endpoints import router
 from src.config import HEADERS
-from src.logger import log_info, log_warn, log_error, get_recent_logs, get_log_stats
+from src.logger import (
+    log_info, log_warn, log_error, get_recent_logs, get_log_stats,
+    silence_uvicorn_access_spam,
+)
+
+silence_uvicorn_access_spam()
 
 app = FastAPI(title="Kuhi API", version="2.0")
 
@@ -19,6 +25,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/logs") or path.startswith("/assets") or path == "/favicon.ico":
+        return await call_next(request)
+
+    t0 = time.time()
+    response = await call_next(request)
+    duration_ms = round((time.time() - t0) * 1000, 1)
+
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    query_str = f"?{request.url.query}" if request.url.query else ""
+    log_info(
+        f"{client_ip} - {request.method} {path}{query_str} -> {response.status_code} ({duration_ms}ms)",
+        tag="HTTP",
+    )
+    return response
+
 
 if os.path.exists("assets"):
     app.mount("/assets", StaticFiles(directory="assets"), name="assets")
@@ -36,11 +62,12 @@ def _norm_url(url: str) -> str | None:
 
 
 @app.get("/proxy_m3u8")
-async def proxy_m3u8(url: str, referer: str = ""):
+async def proxy_m3u8(url: str, referer: str = "", audio: str = "sub"):
     url = _norm_url(url)
     if not url:
         return Response(content='{"detail":"bad proxy url"}', status_code=400,
                         media_type="application/json")
+    audio = (audio or "sub").lower()
     try:
         async with httpx.AsyncClient(timeout=15.0, verify=False, follow_redirects=True) as client:
             h = HEADERS.copy()
@@ -53,7 +80,7 @@ async def proxy_m3u8(url: str, referer: str = ""):
                 except Exception:
                     pass
 
-            log_info(f"Fetching m3u8 playlist: {url[:85]}", tag="PROXY")
+            log_info(f"Fetching m3u8 playlist ({audio}): {url[:85]}", tag="PROXY")
             resp = await client.get(url, headers=h)
             if resp.status_code != 200:
                 log_warn(f"Upstream m3u8 returned status {resp.status_code} for {url[:85]}", tag="PROXY")
@@ -65,6 +92,10 @@ async def proxy_m3u8(url: str, referer: str = ""):
             import re
 
             is_variant = False
+            has_explicit_eng = bool(re.search(r'#EXT-X-MEDIA:TYPE=AUDIO[^\n]*(?:NAME="[^"]*(?:english|dub)|LANGUAGE="(?:eng|en)")', content, re.I))
+            has_explicit_jpn = bool(re.search(r'#EXT-X-MEDIA:TYPE=AUDIO[^\n]*(?:NAME="[^"]*(?:japanese|jap|sub)|LANGUAGE="(?:jpn|ja)")', content, re.I))
+            default_audio_set = False
+
             for line in content.split('\n'):
                 stripped = line.strip()
                 if not stripped:
@@ -77,19 +108,54 @@ async def proxy_m3u8(url: str, referer: str = ""):
                     continue
 
                 if stripped.startswith('#EXT-X-MEDIA'):
-                    media_uri_match = re.search(r'URI="([^"]+)"', stripped)
+                    media_line = stripped
+                    if 'TYPE=AUDIO' in media_line:
+                        is_eng = bool(re.search(r'NAME="[^"]*(?:english|dub)', media_line, re.I) or re.search(r'LANGUAGE="(?:eng|en)"', media_line, re.I))
+                        is_jpn = bool(re.search(r'NAME="[^"]*(?:japanese|jap|sub)', media_line, re.I) or re.search(r'LANGUAGE="(?:jpn|ja)"', media_line, re.I))
+
+                        media_line = re.sub(r',?DEFAULT=(?:YES|NO)', '', media_line)
+                        media_line = re.sub(r',?AUTOSELECT=(?:YES|NO)', '', media_line)
+
+                        if audio == "dub":
+                            if has_explicit_eng:
+                                if is_eng and not default_audio_set:
+                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=YES,AUTOSELECT=YES')
+                                    default_audio_set = True
+                                else:
+                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=NO,AUTOSELECT=NO')
+                            else:
+                                if not default_audio_set:
+                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=YES,AUTOSELECT=YES')
+                                    default_audio_set = True
+                                else:
+                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=NO,AUTOSELECT=NO')
+                        else:  # sub
+                            if has_explicit_jpn:
+                                if is_jpn and not default_audio_set:
+                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=YES,AUTOSELECT=YES')
+                                    default_audio_set = True
+                                elif is_eng:
+                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=NO,AUTOSELECT=NO')
+                            else:
+                                if not default_audio_set:
+                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=YES,AUTOSELECT=YES')
+                                    default_audio_set = True
+                                else:
+                                    media_line = media_line.replace('TYPE=AUDIO', 'TYPE=AUDIO,DEFAULT=NO,AUTOSELECT=NO')
+
+                    media_uri_match = re.search(r'URI="([^"]+)"', media_line)
                     if media_uri_match:
                         sub_url = urljoin(url, media_uri_match.group(1))
-                        proxied_sub = f"/proxy_m3u8?url={quote(sub_url, safe='')}&referer={quote(referer, safe='')}"
-                        line = stripped.replace(f'URI="{media_uri_match.group(1)}"', f'URI="{proxied_sub}"')
-                    lines.append(line)
+                        proxied_sub = f"/proxy_m3u8?url={quote(sub_url, safe='')}&referer={quote(referer, safe='')}&audio={quote(audio, safe='')}"
+                        media_line = media_line.replace(f'URI="{media_uri_match.group(1)}"', f'URI="{proxied_sub}"')
+                    lines.append(media_line)
                     continue
 
                 if stripped.startswith('#EXT-X-KEY'):
                     key_match = re.search(r'URI="([^"]+)"', stripped)
                     if key_match:
                         key_url = urljoin(url, key_match.group(1))
-                        proxied_key = f"/proxy_segment?url={quote(key_url, safe='')}&referer={quote(referer, safe='')}"
+                        proxied_key = f"/proxy_segment?url={quote(key_url, safe='')}&referer={quote(referer, safe='')}&audio={quote(audio, safe='')}"
                         line = stripped.replace(f'URI="{key_match.group(1)}"', f'URI="{proxied_key}"')
                     lines.append(line)
                     continue
@@ -97,9 +163,9 @@ async def proxy_m3u8(url: str, referer: str = ""):
                 if not stripped.startswith('#'):
                     absolute_url = urljoin(url, stripped)
                     if is_variant or '.m3u8' in stripped:
-                        line = f"/proxy_m3u8?url={quote(absolute_url, safe='')}&referer={quote(referer, safe='')}"
+                        line = f"/proxy_m3u8?url={quote(absolute_url, safe='')}&referer={quote(referer, safe='')}&audio={quote(audio, safe='')}"
                     else:
-                        line = f"/proxy_segment?url={quote(absolute_url, safe='')}&referer={quote(referer, safe='')}"
+                        line = f"/proxy_segment?url={quote(absolute_url, safe='')}&referer={quote(referer, safe='')}&audio={quote(audio, safe='')}"
                     is_variant = False
 
                 lines.append(line)
@@ -113,7 +179,7 @@ async def proxy_m3u8(url: str, referer: str = ""):
 
 
 @app.get("/proxy_segment")
-async def proxy_segment(url: str, referer: str = ""):
+async def proxy_segment(url: str, referer: str = "", audio: str = "sub"):
     url = _norm_url(url)
     if not url:
         return Response(content='{"detail":"bad proxy url"}', status_code=400,
@@ -139,7 +205,7 @@ async def proxy_segment(url: str, referer: str = ""):
                 log_info(f"Segment proxied: {len(resp.content)//1024} KB ({resp.status_code} OK)", tag="PROXY")
 
             if resp.content.startswith(b"#EXTM3U"):
-                return await proxy_m3u8(url, referer)
+                return await proxy_m3u8(url, referer, audio=audio)
             media_type = resp.headers.get("content-type", "video/mp2t")
             if "image" in media_type or "octet-stream" in media_type:
                 media_type = "video/mp2t"
@@ -553,7 +619,16 @@ async def home():
                 </select>
             </div>
             <div class="loading">working...</div>
-            <div class="player-wrap"><video id="hls-player" controls @play="refreshReferer"></video></div>
+            <div id="player-status" style="display:none;font-size:0.85rem;font-weight:600;color:#4ade80;margin:12px 0 6px;"></div>
+            <div id="audio-track-wrap" style="display:none;align-items:center;gap:10px;margin:8px 0;font-size:0.85rem;background:#171717;border:1px solid var(--border);padding:8px 12px;border-radius:6px;">
+                <span style="color:#a3a3a3;font-weight:500;">🎧 Audio Track:</span>
+                <select id="audio-track-selector" style="background:#262626;color:#fff;border:1px solid #404040;padding:4px 10px;border-radius:4px;font-size:0.82rem;cursor:pointer;outline:none;"></select>
+                <span id="audio-track-note" style="color:#22c55e;font-size:0.75rem;margin-left:auto;"></span>
+            </div>
+            <div class="player-wrap">
+                <video id="hls-player" controls @play="refreshReferer"></video>
+                <iframe id="embed-player" style="display:none;width:100%;height:100%;border:none;" allowfullscreen></iframe>
+            </div>
             <div class="curl-box">
                 <button class="copy-curl" onclick="copyCurl(this)">copy</button>
                 <code></code>
@@ -588,21 +663,84 @@ async def home():
     </div>
 
     <script>
+        function syncEndpointUrl() {
+            const card = document.querySelector('.card:has(.in-prov)');
+            if (!card) return;
+            const input = card.querySelector('.in-url');
+            const prov = card.querySelector('.in-prov');
+            const typ = card.querySelector('.in-type');
+            if (!input) return;
+            try {
+                let ep = input.value.trim();
+                const dummy = 'http://localhost';
+                const u = new URL(ep.startsWith('/') ? dummy + ep : (ep.startsWith('http') ? ep : dummy + '/' + ep));
+                if (prov && prov.value) u.searchParams.set('provider', prov.value);
+                else u.searchParams.delete('provider');
+                if (typ && typ.value) u.searchParams.set('type', typ.value);
+                input.value = u.pathname + u.search;
+            } catch (e) {}
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const prov = document.querySelector('.in-prov');
+            const typ = document.querySelector('.in-type');
+            if (prov) prov.addEventListener('change', syncEndpointUrl);
+            if (typ) typ.addEventListener('change', syncEndpointUrl);
+        });
+
         async function test(btn) {
             const card = btn.closest('.card');
             const input = card.querySelector('.in-url');
-            let endpoint = input.value;
+            let endpoint = input.value.trim();
             const prov = card.querySelector('.in-prov');
             const typ = card.querySelector('.in-type');
-            if (prov && prov.value) {
-                endpoint += (endpoint.includes('?') ? '&' : '?') + 'provider=' + encodeURIComponent(prov.value);
+
+            try {
+                const dummy = 'http://localhost';
+                const u = new URL(endpoint.startsWith('/') ? dummy + endpoint : (endpoint.startsWith('http') ? endpoint : dummy + '/' + endpoint));
+                if (prov && prov.value) u.searchParams.set('provider', prov.value);
+                else u.searchParams.delete('provider');
+                if (typ && typ.value) u.searchParams.set('type', typ.value);
+                endpoint = u.pathname + u.search;
+                input.value = endpoint;
+            } catch (e) {
+                if (prov && prov.value) endpoint += (endpoint.includes('?') ? '&' : '?') + 'provider=' + encodeURIComponent(prov.value);
+                if (typ && typ.value) endpoint += (endpoint.includes('?') ? '&' : '?') + 'type=' + encodeURIComponent(typ.value);
             }
-            if (typ && typ.value) {
-                endpoint += (endpoint.includes('?') ? '&' : '?') + 'type=' + encodeURIComponent(typ.value);
-            }
+
             const resBox = card.querySelector('.res-box');
             const pre = resBox.querySelector('pre');
             const loader = card.querySelector('.loading');
+            const playerWrap = card.querySelector('.player-wrap');
+            const playerStatus = card.querySelector('#player-status');
+            const audioTrackWrap = card.querySelector('#audio-track-wrap');
+            const audioTrackSel = card.querySelector('#audio-track-selector');
+            const audioTrackNote = card.querySelector('#audio-track-note');
+            const video = document.getElementById('hls-player');
+            const embed = document.getElementById('embed-player');
+            const curlBox = card.querySelector('.curl-box');
+
+            // Immediately unload any previous video so old anime never lingers
+            if (window.hlsInstance) {
+                try { window.hlsInstance.destroy(); } catch (e) {}
+                window.hlsInstance = null;
+            }
+            if (video) {
+                video.pause();
+                video.removeAttribute('src');
+                video.load();
+                video.style.display = 'block';
+            }
+            if (embed) {
+                embed.src = 'about:blank';
+                embed.style.display = 'none';
+            }
+            if (playerWrap) playerWrap.style.display = 'none';
+            if (playerStatus) playerStatus.style.display = 'none';
+            if (audioTrackWrap) audioTrackWrap.style.display = 'none';
+            if (audioTrackSel) audioTrackSel.innerHTML = '';
+            if (audioTrackNote) audioTrackNote.textContent = '';
+            if (curlBox) curlBox.style.display = 'none';
 
             resBox.style.display = 'none';
             loader.style.display = 'block';
@@ -613,18 +751,12 @@ async def home():
                 pre.textContent = JSON.stringify(data, null, 2);
                 resBox.style.display = 'block';
 
-                // init player if streams exist in extraction
                 if (data.streams && data.streams.length > 0) {
                     const hlsStream = data.streams.find(s => s.type === 'hls');
                     if (hlsStream && Hls.isSupported()) {
-                        const video = document.getElementById('hls-player');
-                        if (window.hlsInstance) {
-                            try { window.hlsInstance.destroy(); } catch (e) {}
-                        }
                         const hls = new Hls({
                             maxBufferLength: 30,
                             xhrSetup: function(xhr, url) {
-                                // force all requests through our server
                                 if (url.startsWith('http') && !url.includes('127.0.0.1') && !url.includes('localhost')) {
                                     return;
                                 }
@@ -635,11 +767,11 @@ async def home():
                             if (errData.fatal) {
                                 switch (errData.type) {
                                     case Hls.ErrorTypes.NETWORK_ERROR:
-                                        console.warn('Network error encountered, trying recovery...');
+                                        console.warn('Network error, attempting recovery...');
                                         hls.startLoad();
                                         break;
                                     case Hls.ErrorTypes.MEDIA_ERROR:
-                                        console.warn('Media error encountered, trying recovery...');
+                                        console.warn('Media error, attempting recovery...');
                                         hls.recoverMediaError();
                                         break;
                                     default:
@@ -649,19 +781,100 @@ async def home():
                                 }
                             }
                         });
-                        // we use an internal proxy to inject the required referer per stream response
-                        const proxyUrl = `/proxy_m3u8?url=${encodeURIComponent(hlsStream.url)}&referer=${encodeURIComponent(hlsStream.referer || '')}`;
+
+                        const reqAudio = (data.type || (typ ? typ.value : 'sub') || 'sub').toLowerCase();
+                        const proxyUrl = `/proxy_m3u8?url=${encodeURIComponent(hlsStream.url)}&referer=${encodeURIComponent(hlsStream.referer || '')}&audio=${encodeURIComponent(reqAudio)}`;
+
+                        function setupAudioTracks() {
+                            if (!hls.audioTracks || hls.audioTracks.length === 0) return;
+
+                            // Auto-select preferred track according to sub/dub request
+                            if (reqAudio === 'dub') {
+                                const engIdx = hls.audioTracks.findIndex(t =>
+                                    /eng|dub/i.test(t.name || '') || /eng|en/i.test(t.lang || '')
+                                );
+                                if (engIdx !== -1 && hls.audioTrack !== engIdx) {
+                                    hls.audioTrack = engIdx;
+                                } else if (hls.audioTrack < 0 && hls.audioTracks.length > 0) {
+                                    hls.audioTrack = 0;
+                                }
+                            } else if (reqAudio === 'sub') {
+                                const jpnIdx = hls.audioTracks.findIndex(t =>
+                                    /jpn|jap|sub/i.test(t.name || '') || /jpn|ja/i.test(t.lang || '')
+                                );
+                                if (jpnIdx !== -1 && hls.audioTrack !== jpnIdx) {
+                                    hls.audioTrack = jpnIdx;
+                                } else if (hls.audioTrack < 0 && hls.audioTracks.length > 0) {
+                                    hls.audioTrack = 0;
+                                }
+                            } else if (hls.audioTrack < 0 && hls.audioTracks.length > 0) {
+                                hls.audioTrack = 0;
+                            }
+
+                            if (audioTrackSel && audioTrackWrap) {
+                                audioTrackSel.innerHTML = '';
+                                hls.audioTracks.forEach((tr, idx) => {
+                                    const opt = document.createElement('option');
+                                    opt.value = idx;
+                                    const label = tr.name || tr.lang || `Track ${idx + 1}`;
+                                    opt.textContent = label + (tr.lang && !label.toLowerCase().includes(tr.lang.toLowerCase()) ? ` (${tr.lang})` : '');
+                                    audioTrackSel.appendChild(opt);
+                                });
+                                const activeIdx = hls.audioTrack >= 0 ? hls.audioTrack : 0;
+                                audioTrackSel.value = activeIdx;
+                                audioTrackWrap.style.display = 'flex';
+                                if (audioTrackNote) {
+                                    const curr = hls.audioTracks[activeIdx];
+                                    audioTrackNote.textContent = curr ? `Playing: ${curr.name || curr.lang || 'Default'}` : '';
+                                }
+                                audioTrackSel.onchange = function() {
+                                    const chosen = parseInt(this.value, 10);
+                                    hls.audioTrack = chosen;
+                                    if (audioTrackNote) {
+                                        const c = hls.audioTracks[chosen];
+                                        audioTrackNote.textContent = c ? `Switched to: ${c.name || c.lang || 'Track ' + (chosen + 1)}` : '';
+                                    }
+                                };
+                            }
+                        }
+
+                        hls.on(Hls.Events.MANIFEST_PARSED, setupAudioTracks);
+                        hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, setupAudioTracks);
+                        hls.on(Hls.Events.AUDIO_TRACK_SWITCHED, function(ev, trackData) {
+                            if (audioTrackSel) audioTrackSel.value = trackData.id;
+                            if (audioTrackNote && hls.audioTracks[trackData.id]) {
+                                audioTrackNote.textContent = `Playing: ${hls.audioTracks[trackData.id].name || hls.audioTracks[trackData.id].lang || 'Track ' + (trackData.id + 1)}`;
+                            }
+                        });
+
                         hls.loadSource(proxyUrl);
                         hls.attachMedia(video);
                         video.play().catch(() => {});
-                        card.querySelector('.player-wrap').style.display = 'block';
+                        video.style.display = 'block';
+                        if (embed) embed.style.display = 'none';
+                        if (playerWrap) playerWrap.style.display = 'block';
+                        if (playerStatus) {
+                            playerStatus.textContent = `▶ Now streaming: ${data.provider.toUpperCase()} (Episode ${data.episode}, ${data.type.toUpperCase()})`;
+                            playerStatus.style.display = 'block';
+                        }
 
-                        // add curl command for m3u8
                         const curlCmd = `curl -H "Referer: ${hlsStream.referer || ''}" "${hlsStream.url}"`;
-                        const curlBox = card.querySelector('.curl-box');
                         if (curlBox) {
                             curlBox.querySelector('code').textContent = curlCmd;
                             curlBox.style.display = 'block';
+                        }
+                    } else {
+                        // Fallback to embed stream if no HLS is available
+                        const embedStream = data.streams.find(s => s.type === 'embed');
+                        if (embedStream && embed) {
+                            if (video) video.style.display = 'none';
+                            embed.src = embedStream.url;
+                            embed.style.display = 'block';
+                            if (playerWrap) playerWrap.style.display = 'block';
+                            if (playerStatus) {
+                                playerStatus.textContent = `▶ Now Playing Embed: ${data.provider.toUpperCase()} (Episode ${data.episode})`;
+                                playerStatus.style.display = 'block';
+                            }
                         }
                     }
                 }
