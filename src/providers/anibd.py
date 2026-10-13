@@ -37,6 +37,14 @@ async def resolve_player_stream(player_link: str) -> dict:
     hls = extract_video_url(html, origin)
     if not hls:
         raise RuntimeError(f"anibd: no videoUrl found at {player_link}")
+    if "nukitashi.top" in hls:
+        raise RuntimeError("anibd: dead stream host nukitashi.top")
+    try:
+        probe = await fetch_text(hls, {"Referer": referer}, timeout=5.0)
+        if "nukitashi.top" in probe or "#EXTM3U" not in probe:
+            raise RuntimeError("anibd: playlist contains dead segment hosts or invalid m3u8")
+    except Exception as e:
+        raise RuntimeError(f"anibd: stream verification failed: {e}")
     return {"hls": hls, "referer": referer}
 
 

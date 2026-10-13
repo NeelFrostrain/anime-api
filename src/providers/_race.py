@@ -3,10 +3,11 @@ import importlib
 import time
 
 from src.providers._media import build_ctx
+from src.logger import log_info, log_debug
 
 RANKING = [
-    "anineko", "anizone", "anikoto", "reanime", "aniwaves",
-    "kaa", "anibd", "animegg", "mkissa", "animeonsen",
+    "aniwaves", "anikoto", "anizone", "kaa", "anineko",
+    "animeonsen", "animegg", "mkissa", "anibd", "reanime",
 ]
 
 WATCH_TIMEOUT = 75.0
@@ -69,8 +70,15 @@ async def _watch_one(mod, name, anilist_id, ep, audio, ctx):
         streams = await asyncio.wait_for(mod.watch(anilist_id, audio, ep, ctx), WATCH_TIMEOUT)
         dt = round(time.time() - t0, 3)
         if streams:
-            _watch_cache[key] = (time.time() + WATCH_CACHE_TTL, streams)
-            return name, streams, dt, True
+            valid_streams = [
+                s for s in streams
+                if isinstance(s, dict)
+                and "nukitashi.top" not in s.get("url", "")
+                and "flixcloud.cc" not in s.get("url", "")
+            ]
+            if valid_streams:
+                _watch_cache[key] = (time.time() + WATCH_CACHE_TTL, valid_streams)
+                return name, valid_streams, dt, True
         return name, None, dt, False
     except Exception as e:
         return name, None, round(time.time() - t0, 3), False
@@ -95,6 +103,7 @@ async def race_watch(anilist_id: int, ep: int, audio: str = "sub",
             mods = [m for m in mods if m[0] != preferred]
             if not mods:
                 return None
+    log_info(f"Racing {len(mods)} providers for AniList ID {anilist_id} Ep {ep} ({audio})", tag="RACE")
     pending = {asyncio.ensure_future(_watch_one(mod, name, anilist_id, ep, audio, ctx))
                for name, mod in mods}
     timings: dict = {}
@@ -127,7 +136,9 @@ async def race_watch(anilist_id: int, ep: int, audio: str = "sub",
                 for task in pending:
                     task.cancel()
     if winner is None:
+        log_info(f"No winning provider found for AniList {anilist_id} Ep {ep}", tag="RACE")
         return None
+    log_info(f"Winner '{winner['provider']}' won race with {len(winner['streams'])} streams", tag="RACE")
     winner["timings"] = timings
     winner["defaultProvider"] = default_provider()
     if preferred:
@@ -143,8 +154,7 @@ async def _episodes_one(mod, name, anilist_id, ctx):
         count = sum(len(v) for v in eps.values() if isinstance(v, list))
         record_latency(name, time.time() - t0, count > 0, kind="episodes")
         return name, data if count > 0 else None
-    except Exception as e:
-        print(f"[RACE] {name} episodes failed: {str(e)[:120]}")
+    except Exception:
         record_latency(name, time.time() - t0, False, kind="episodes")
         return name, None
 

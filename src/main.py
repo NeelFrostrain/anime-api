@@ -1,11 +1,14 @@
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Query
+from fastapi.responses import HTMLResponse, Response, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from src.endpoints import router
-from src.config import HEADERS
+from urllib.parse import urlparse
 import httpx
 import os
+
+from src.endpoints import router
+from src.config import HEADERS
+from src.logger import log_info, log_warn, log_error, get_recent_logs, get_log_stats
 
 app = FastAPI(title="Kuhi API", version="2.0")
 
@@ -22,9 +25,6 @@ if os.path.exists("assets"):
 
 app.include_router(router, prefix="/anime")
 
-from fastapi import Query
-from fastapi.responses import Response
-
 
 def _norm_url(url: str) -> str | None:
     url = (url or "").strip()
@@ -36,43 +36,137 @@ def _norm_url(url: str) -> str | None:
 
 
 @app.get("/proxy_m3u8")
-async def proxy_m3u8(url: str, referer: str):
+async def proxy_m3u8(url: str, referer: str = ""):
     url = _norm_url(url)
     if not url:
         return Response(content='{"detail":"bad proxy url"}', status_code=400,
                         media_type="application/json")
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        h = HEADERS.copy()
-        h["Referer"] = referer
-        resp = await client.get(url, headers=h)
+    try:
+        async with httpx.AsyncClient(timeout=15.0, verify=False, follow_redirects=True) as client:
+            h = HEADERS.copy()
+            if referer:
+                h["Referer"] = referer
+                try:
+                    p = urlparse(referer)
+                    if p.scheme and p.netloc:
+                        h["Origin"] = f"{p.scheme}://{p.netloc}"
+                except Exception:
+                    pass
 
-        content = resp.text
-        lines = []
-        from urllib.parse import quote, urljoin
-        for line in content.split('\n'):
-            stripped = line.strip()
-            if stripped and not stripped.startswith('#'):
-                absolute_url = urljoin(url, stripped)
-                if '.m3u8' in stripped:
-                    line = f"/proxy_m3u8?url={quote(absolute_url, safe='')}&referer={quote(referer, safe='')}"
-                else:
-                    line = f"/proxy_segment?url={quote(absolute_url, safe='')}&referer={quote(referer, safe='')}"
-            lines.append(line)
+            log_info(f"Fetching m3u8 playlist: {url[:85]}", tag="PROXY")
+            resp = await client.get(url, headers=h)
+            if resp.status_code != 200:
+                log_warn(f"Upstream m3u8 returned status {resp.status_code} for {url[:85]}", tag="PROXY")
+                return Response(content=resp.content, status_code=resp.status_code, media_type="text/plain")
 
-        return Response(content='\n'.join(lines), media_type="application/vnd.apple.mpegurl")
+            content = resp.text
+            lines = []
+            from urllib.parse import quote, urljoin
+            import re
+
+            is_variant = False
+            for line in content.split('\n'):
+                stripped = line.strip()
+                if not stripped:
+                    lines.append(line)
+                    continue
+
+                if stripped.startswith('#EXT-X-STREAM-INF') or stripped.startswith('#EXT-X-I-FRAME-STREAM-INF'):
+                    is_variant = True
+                    lines.append(line)
+                    continue
+
+                if stripped.startswith('#EXT-X-MEDIA'):
+                    media_uri_match = re.search(r'URI="([^"]+)"', stripped)
+                    if media_uri_match:
+                        sub_url = urljoin(url, media_uri_match.group(1))
+                        proxied_sub = f"/proxy_m3u8?url={quote(sub_url, safe='')}&referer={quote(referer, safe='')}"
+                        line = stripped.replace(f'URI="{media_uri_match.group(1)}"', f'URI="{proxied_sub}"')
+                    lines.append(line)
+                    continue
+
+                if stripped.startswith('#EXT-X-KEY'):
+                    key_match = re.search(r'URI="([^"]+)"', stripped)
+                    if key_match:
+                        key_url = urljoin(url, key_match.group(1))
+                        proxied_key = f"/proxy_segment?url={quote(key_url, safe='')}&referer={quote(referer, safe='')}"
+                        line = stripped.replace(f'URI="{key_match.group(1)}"', f'URI="{proxied_key}"')
+                    lines.append(line)
+                    continue
+
+                if not stripped.startswith('#'):
+                    absolute_url = urljoin(url, stripped)
+                    if is_variant or '.m3u8' in stripped:
+                        line = f"/proxy_m3u8?url={quote(absolute_url, safe='')}&referer={quote(referer, safe='')}"
+                    else:
+                        line = f"/proxy_segment?url={quote(absolute_url, safe='')}&referer={quote(referer, safe='')}"
+                    is_variant = False
+
+                lines.append(line)
+
+            log_info(f"M3U8 proxied successfully ({len(lines)} lines parsed)", tag="PROXY")
+            return Response(content='\n'.join(lines), media_type="application/vnd.apple.mpegurl")
+    except Exception as e:
+        log_error(f"Error fetching m3u8: {e}", tag="PROXY", exc=e)
+        return Response(content=f'{{"detail":"proxy_m3u8 error: {str(e)}"}}', status_code=502,
+                        media_type="application/json")
 
 
 @app.get("/proxy_segment")
-async def proxy_segment(url: str, referer: str):
+async def proxy_segment(url: str, referer: str = ""):
     url = _norm_url(url)
     if not url:
         return Response(content='{"detail":"bad proxy url"}', status_code=400,
                         media_type="application/json")
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        h = HEADERS.copy()
-        h["Referer"] = referer
-        resp = await client.get(url, headers=h)
-        return Response(content=resp.content, media_type="video/mp2t")
+    try:
+        async with httpx.AsyncClient(timeout=30.0, verify=False, follow_redirects=True) as client:
+            h = HEADERS.copy()
+            if referer:
+                h["Referer"] = referer
+                try:
+                    p = urlparse(referer)
+                    if p.scheme and p.netloc:
+                        h["Origin"] = f"{p.scheme}://{p.netloc}"
+                except Exception:
+                    pass
+
+            resp = await client.get(url, headers=h)
+            if resp.status_code == 403:
+                log_warn(f"Upstream segment 403 Forbidden: {url[:85]}", tag="PROXY")
+            elif resp.status_code != 200:
+                log_warn(f"Upstream segment status {resp.status_code}: {url[:85]}", tag="PROXY")
+            else:
+                log_info(f"Segment proxied: {len(resp.content)//1024} KB ({resp.status_code} OK)", tag="PROXY")
+
+            if resp.content.startswith(b"#EXTM3U"):
+                return await proxy_m3u8(url, referer)
+            media_type = resp.headers.get("content-type", "video/mp2t")
+            if "image" in media_type or "octet-stream" in media_type:
+                media_type = "video/mp2t"
+            return Response(content=resp.content, status_code=resp.status_code, media_type=media_type)
+    except httpx.HTTPError as e:
+        log_error(f"Network error fetching segment: {e}", tag="PROXY")
+        return Response(content=b"", status_code=502)
+    except Exception as e:
+        log_error(f"Unexpected error fetching segment: {e}", tag="PROXY", exc=e)
+        return Response(content=b"", status_code=500)
+
+
+@app.get("/logs")
+async def view_logs(lines: int = Query(150, ge=10, le=1000)):
+    recent = get_recent_logs(lines)
+    return {"lines": recent, "count": len(recent)}
+
+
+@app.get("/logs/raw")
+async def view_logs_raw(lines: int = Query(150, ge=10, le=1000)):
+    recent = get_recent_logs(lines)
+    return PlainTextResponse("\n".join(recent))
+
+
+@app.get("/logs/stats")
+async def view_logs_stats():
+    return get_log_stats()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -467,6 +561,27 @@ async def home():
             <div class="res-box"><pre></pre></div>
         </div>
 
+        <span class="lbl">live server & streaming logs</span>
+
+        <div class="card" id="logs-card">
+            <div class="meta">
+                <div><span class="method" style="background:#22c55e;color:#000">LOGS</span> <span class="path">/logs/raw</span> <span class="tag">live disk stream</span></div>
+                <div style="display:flex;gap:8px;">
+                    <a href="/logs/raw" target="_blank" style="color:var(--text-muted);font-size:0.75rem;text-decoration:none;border:1px solid var(--border);padding:4px 8px;border-radius:4px;">raw text ↗</a>
+                    <a href="/logs" target="_blank" style="color:var(--text-muted);font-size:0.75rem;text-decoration:none;border:1px solid var(--border);padding:4px 8px;border-radius:4px;">json ↗</a>
+                    <a href="/logs/stats" target="_blank" style="color:var(--text-muted);font-size:0.75rem;text-decoration:none;border:1px solid var(--border);padding:4px 8px;border-radius:4px;">stats ↗</a>
+                </div>
+            </div>
+            <div class="desc">live activity stream saved in <code>logs/api.log</code> and <code>logs/errors.log</code>. tracks HLS segment fetching, provider racing, and stream extractions with rotating disk persistence.</div>
+            <div class="sandbox">
+                <button class="try-btn" onclick="fetchServerLogs()" style="background:#262626;color:#fff;">refresh logs</button>
+                <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text-muted);margin-left:12px;cursor:pointer;">
+                    <input type="checkbox" id="auto-logs" checked onchange="toggleAutoLogs()"> auto-refresh (2s)
+                </label>
+            </div>
+            <pre id="log-terminal" style="max-height:300px;overflow-y:auto;background:#0d0d0d;border:1px solid #333;color:#4ade80;font-size:0.75rem;line-height:1.4;">loading logs...</pre>
+        </div>
+
         <footer>
             kuhi native 2.0 interface — miruro
         </footer>
@@ -503,7 +618,11 @@ async def home():
                     const hlsStream = data.streams.find(s => s.type === 'hls');
                     if (hlsStream && Hls.isSupported()) {
                         const video = document.getElementById('hls-player');
+                        if (window.hlsInstance) {
+                            try { window.hlsInstance.destroy(); } catch (e) {}
+                        }
                         const hls = new Hls({
+                            maxBufferLength: 30,
                             xhrSetup: function(xhr, url) {
                                 // force all requests through our server
                                 if (url.startsWith('http') && !url.includes('127.0.0.1') && !url.includes('localhost')) {
@@ -511,14 +630,34 @@ async def home():
                                 }
                             }
                         });
+                        window.hlsInstance = hls;
+                        hls.on(Hls.Events.ERROR, function(event, errData) {
+                            if (errData.fatal) {
+                                switch (errData.type) {
+                                    case Hls.ErrorTypes.NETWORK_ERROR:
+                                        console.warn('Network error encountered, trying recovery...');
+                                        hls.startLoad();
+                                        break;
+                                    case Hls.ErrorTypes.MEDIA_ERROR:
+                                        console.warn('Media error encountered, trying recovery...');
+                                        hls.recoverMediaError();
+                                        break;
+                                    default:
+                                        console.error('Fatal HLS error:', errData);
+                                        hls.destroy();
+                                        break;
+                                }
+                            }
+                        });
                         // we use an internal proxy to inject the required referer per stream response
-                        const proxyUrl = `/proxy_m3u8?url=${encodeURIComponent(hlsStream.url)}&referer=${encodeURIComponent(hlsStream.referer)}`;
+                        const proxyUrl = `/proxy_m3u8?url=${encodeURIComponent(hlsStream.url)}&referer=${encodeURIComponent(hlsStream.referer || '')}`;
                         hls.loadSource(proxyUrl);
                         hls.attachMedia(video);
+                        video.play().catch(() => {});
                         card.querySelector('.player-wrap').style.display = 'block';
 
                         // add curl command for m3u8
-                        const curlCmd = `curl -H "Referer: ${hlsStream.referer}" "${hlsStream.url}"`;
+                        const curlCmd = `curl -H "Referer: ${hlsStream.referer || ''}" "${hlsStream.url}"`;
                         const curlBox = card.querySelector('.curl-box');
                         if (curlBox) {
                             curlBox.querySelector('code').textContent = curlCmd;
@@ -540,6 +679,29 @@ async def home():
             btn.textContent = 'copied!';
             setTimeout(() => btn.textContent = 'copy', 2000);
         }
+
+        async function fetchServerLogs() {
+            try {
+                const res = await fetch('/logs/raw?lines=80');
+                const text = await res.text();
+                const term = document.getElementById('log-terminal');
+                if (term) {
+                    term.textContent = text || 'No logs recorded yet.';
+                    term.scrollTop = term.scrollHeight;
+                }
+            } catch (err) {}
+        }
+        let logInterval = setInterval(fetchServerLogs, 2000);
+        function toggleAutoLogs() {
+            const cb = document.getElementById('auto-logs');
+            if (cb.checked) {
+                if (!logInterval) logInterval = setInterval(fetchServerLogs, 2000);
+            } else {
+                clearInterval(logInterval);
+                logInterval = null;
+            }
+        }
+        fetchServerLogs();
     </script>
 </body>
 </html>"""

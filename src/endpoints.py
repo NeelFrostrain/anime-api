@@ -8,6 +8,7 @@ from src.parser import proxy_deep_images, inject_source_slugs, encode_pipe_reque
 from src.extractor import anilist_query, fetch_raw_episodes
 from src.config import iter_miruro_pipe_targets
 from src.providers import _race as provider_race
+from src.logger import log_info, log_warn, log_error
 
 router = APIRouter()
 
@@ -18,6 +19,7 @@ async def search_anime(
     page: int = Query(1, ge=1, description="page number"),
     per_page: int = Query(20, ge=1, le=50, description="results per page"),
 ):
+    log_info(f"Search request: query='{query}' page={page}", tag="SEARCH")
 
     gql = f"""
     query ($search: String, $page: Int, $perPage: Int) {{
@@ -442,6 +444,7 @@ async def get_anime_recommendations(
 
 @router.get("/episodes/{anilist_id}")
 async def get_episodes(anilist_id: int):
+    log_info(f"Fetching episode list for AniList ID {anilist_id}", tag="EPISODES")
 
     try:
         native = await provider_race.merged_episodes(anilist_id)
@@ -571,6 +574,8 @@ async def extract_simple(
         if media_format == "MOVIE":
             episode = 1
 
+    log_info(f"Extract request: '{query}' (AniList {anilist_id}) | Ep {episode} | {audio} | Provider: {wanted or 'auto'}", tag="EXTRACT")
+
     try:
         raced = await provider_race.race_watch(anilist_id, episode, audio, preferred=wanted)
         if raced:
@@ -584,9 +589,10 @@ async def extract_simple(
                 "streams": raced["streams"],
                 "subtitles": provider_race.merge_subtitles(raced["streams"]),
             }
+            log_info(f"Extracted {len(raced['streams'])} streams for '{query}' via '{raced['provider']}'", tag="EXTRACT")
             return proxy_deep_images(result)
     except Exception as e:
-        print(f"[KUHI API] native race failed, falling back to pipe: {e}")
+        log_warn(f"Native race failed for '{query}', falling back to pipe: {e}", tag="EXTRACT")
 
     data = await fetch_raw_episodes(anilist_id)
     providers = data.get("providers", {})
