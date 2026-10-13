@@ -36,15 +36,20 @@ cd Kuhi-anime-api
 python -m pip install -r requirements.txt
 ```
 
-3. Run the server:
+3. Run the Backend API:
 ```bash
-uvicorn api:app --reload
+python -m uvicorn api:app --reload
 ```
+The FastAPI backend runs on `http://127.0.0.1:8000`.
 
-4. Access the API:
+4. Run the Next.js Frontend Studio:
+```bash
+cd web
+npm install
+npm run dev
 ```
-http://127.0.0.1:8000
-```
+The Next.js frontend runs on `http://localhost:3000`.
+
 
 ## Project Structure
 

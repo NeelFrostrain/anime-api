@@ -87,6 +87,46 @@ async def _watch_one(mod, name, anilist_id, ep, audio, ctx):
         return name, None, round(time.time() - t0, 3), False, False
 
 
+_SUBTITLE_CACHE: dict = {}
+
+
+async def get_episode_subtitles(anilist_id: int, ep: int, ctx: dict | None = None) -> list:
+    """Fetch external subtitles across providers (anizone, reanime, anikoto, animeonsen) with caching."""
+    cache_key = (anilist_id, ep)
+    now = time.time()
+    if cache_key in _SUBTITLE_CACHE:
+        ts, cached_subs = _SUBTITLE_CACHE[cache_key]
+        if now - ts < 600:
+            return cached_subs
+
+    ctx = ctx or await build_ctx(anilist_id)
+    mods_dict = dict(providers())
+    target_names = [n for n in ["anizone", "reanime", "anikoto", "animeonsen"] if n in mods_dict]
+    if not target_names:
+        return []
+
+    tasks = [asyncio.create_task(_watch_one(mods_dict[n], n, anilist_id, ep, "sub", ctx)) for n in target_names]
+    subs = []
+    try:
+        done, pending = await asyncio.wait(tasks, timeout=2.5)
+        for t in done:
+            try:
+                _, streams, _, ok, _ = t.result()
+                if ok and streams:
+                    subs.extend(merge_subtitles(streams))
+            except Exception:
+                pass
+        for p in pending:
+            p.cancel()
+    except Exception:
+        pass
+
+    normalized = merge_subtitles([{"subtitles": subs}])
+    if normalized:
+        _SUBTITLE_CACHE[cache_key] = (now, normalized)
+    return normalized
+
+
 async def race_watch(anilist_id: int, ep: int, audio: str = "sub",
                      preferred: str | None = None) -> dict | None:
     mods = providers()
@@ -99,8 +139,12 @@ async def race_watch(anilist_id: int, ep: int, audio: str = "sub",
             name, streams, dt, ok, has_stream = await _watch_one(pick[1], pick[0], anilist_id, ep, audio, ctx)
             record_latency(name, dt, ok)
             if ok:
+                subs = merge_subtitles(streams)
+                if not subs and audio == "sub":
+                    subs = await get_episode_subtitles(anilist_id, ep, ctx)
                 return {"provider": name, "streams": streams,
                         "requestedProvider": preferred,
+                        "subtitles": subs,
                         "timings": {name: {"seconds": dt, "ok": True}},
                         "defaultProvider": default_provider()}
             mods = [m for m in mods if m[0] != preferred]
@@ -112,6 +156,7 @@ async def race_watch(anilist_id: int, ep: int, audio: str = "sub",
     timings: dict = {}
     winner = None
     embed_fallback = None
+    collected_subs = []
     try:
         while pending:
             done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
@@ -119,13 +164,35 @@ async def race_watch(anilist_id: int, ep: int, audio: str = "sub",
                 name, streams, dt, ok, has_stream = task.result()
                 timings[name] = {"seconds": dt, "ok": ok}
                 record_latency(name, dt, ok)
-                if ok:
+                if ok and streams:
+                    task_subs = merge_subtitles(streams)
+                    if task_subs:
+                        collected_subs.extend(task_subs)
                     if has_stream and winner is None:
                         winner = {"provider": name, "streams": streams}
                     elif embed_fallback is None:
                         embed_fallback = {"provider": name, "streams": streams}
-            # Once we find a winner with real HLS video, we can stop the race immediately
+
+            # Once we find a winner with real HLS video, check if we need subtitles
             if winner is not None:
+                winner_subs = merge_subtitles(winner.get("streams") or [])
+                # If winner has no subtitles and pending tasks remain, give up to 1.5s for pending subtitle providers
+                if not winner_subs and pending and audio == "sub":
+                    try:
+                        done2, pending = await asyncio.wait(pending, timeout=1.5)
+                        for t in done2:
+                            try:
+                                s_name, s_streams, s_dt, s_ok, _ = t.result()
+                                timings[s_name] = {"seconds": s_dt, "ok": s_ok}
+                                record_latency(s_name, s_dt, s_ok)
+                                if s_ok and s_streams:
+                                    s_subs = merge_subtitles(s_streams)
+                                    if s_subs:
+                                        collected_subs.extend(s_subs)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
                 break
     finally:
         # If no HLS winner was found yet, allow up to 1.5s for remaining tasks before fallback
@@ -137,8 +204,12 @@ async def race_watch(anilist_id: int, ep: int, audio: str = "sub",
                         name, streams, dt, ok, has_stream = task.result()
                         timings[name] = {"seconds": dt, "ok": ok}
                         record_latency(name, dt, ok)
-                        if ok and winner is None and has_stream:
-                            winner = {"provider": name, "streams": streams}
+                        if ok and streams:
+                            task_subs = merge_subtitles(streams)
+                            if task_subs:
+                                collected_subs.extend(task_subs)
+                            if winner is None and has_stream:
+                                winner = {"provider": name, "streams": streams}
                     except Exception:
                         pass
                 pending = pending2
@@ -157,7 +228,13 @@ async def race_watch(anilist_id: int, ep: int, audio: str = "sub",
     winner["defaultProvider"] = default_provider()
     if preferred:
         winner["requestedProvider"] = preferred
+
+    final_subs = merge_subtitles([{"subtitles": merge_subtitles(winner["streams"]) + collected_subs}])
+    if not final_subs and audio == "sub":
+        final_subs = await get_episode_subtitles(anilist_id, ep, ctx)
+    winner["subtitles"] = final_subs
     return winner
+
 
 
 async def _episodes_one(mod, name, anilist_id, ctx):
@@ -190,10 +267,33 @@ def merge_subtitles(streams: list) -> list:
     seen, out = set(), []
     for s in streams or []:
         for sub in s.get("subtitles") or []:
-            url = sub.get("url")
-            if url and url not in seen:
-                seen.add(url)
-                out.append(sub)
+            if isinstance(sub, str):
+                sub = {"url": sub, "label": "Subtitle", "srclang": "en"}
+            if not isinstance(sub, dict):
+                continue
+            url = sub.get("url") or sub.get("file") or sub.get("src")
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            label = (
+                sub.get("label")
+                or sub.get("title")
+                or sub.get("name")
+                or sub.get("lang")
+                or sub.get("language")
+                or "Subtitle"
+            )
+            srclang = sub.get("srclang") or sub.get("language") or sub.get("lang") or "en"
+            sub_format = sub.get("format") or ("vtt" if ".vtt" in url.lower() else "srt" if ".srt" in url.lower() else "ass" if ".ass" in url.lower() else "vtt")
+            referer = sub.get("referer") or s.get("referer") or ""
+            out.append({
+                "url": url,
+                "label": label,
+                "srclang": srclang,
+                "format": sub_format,
+                "default": bool(sub.get("default")),
+                "referer": referer,
+            })
     return out
 
 

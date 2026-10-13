@@ -247,7 +247,8 @@ async def watch(anilist_id: int, audio: str, ep: int, ctx: dict | None = None) -
                         playback_data = res.json()
 
                     if playback_data and isinstance(playback_data, dict):
-                        # Parse tracks/providers
+                        # Parse tracks/providers and subtitles
+                        raw_subs = playback_data.get("subtitles") or []
                         tracks = playback_data.get("tracks") or []
                         for tr in tracks:
                             if tr.get("track") == audio or (audio == "sub" and tr.get("track") in ("sub", "ssub")):
@@ -270,6 +271,7 @@ async def watch(anilist_id: int, audio: str, ep: int, ctx: dict | None = None) -
                                                 "referer": "https://krussdomi.com/",
                                                 "priority": 1,
                                                 "isActive": len(streams) == 0,
+                                                "subtitles": raw_subs,
                                             })
                         if streams:
                             return streams
@@ -307,6 +309,7 @@ async def watch(anilist_id: int, audio: str, ep: int, ctx: dict | None = None) -
 
     if pipe_sources and isinstance(pipe_sources, dict):
         sources_list = pipe_sources.get("sources") or []
+        pipe_subs = pipe_sources.get("subtitles") or []
         for s in sources_list:
             if not isinstance(s, dict):
                 continue
@@ -322,6 +325,7 @@ async def watch(anilist_id: int, audio: str, ep: int, ctx: dict | None = None) -
                 "referer": "https://www.miruro.bz/",
                 "priority": 1 if len(streams) == 0 else 2,
                 "isActive": len(streams) == 0,
+                "subtitles": pipe_subs,
             })
 
     if not streams:

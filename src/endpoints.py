@@ -579,6 +579,12 @@ async def extract_simple(
     try:
         raced = await provider_race.race_watch(anilist_id, episode, audio, preferred=wanted)
         if raced:
+            subs = raced.get("subtitles") or provider_race.merge_subtitles(raced["streams"])
+            if not subs and audio == "sub":
+                try:
+                    subs = await provider_race.get_episode_subtitles(anilist_id, episode)
+                except Exception:
+                    pass
             result = {
                 "anilistId": anilist_id,
                 "episode": episode,
@@ -587,7 +593,7 @@ async def extract_simple(
                 "defaultProvider": raced.get("defaultProvider"),
                 "requestedProvider": raced.get("requestedProvider"),
                 "streams": raced["streams"],
-                "subtitles": provider_race.merge_subtitles(raced["streams"]),
+                "subtitles": subs,
             }
             log_info(f"Extracted {len(raced['streams'])} streams for '{query}' via '{raced['provider']}'", tag="EXTRACT")
             return proxy_deep_images(result)
