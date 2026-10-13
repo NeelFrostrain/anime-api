@@ -8,6 +8,7 @@ from src.logger import log_info, log_debug, log_warn
 RANKING = [
     "aniwaves", "anikoto", "anizone", "kaa", "anineko",
     "animeonsen", "animegg", "mkissa", "anibd", "reanime",
+    "miruro",
 ]
 
 WATCH_TIMEOUT = 75.0

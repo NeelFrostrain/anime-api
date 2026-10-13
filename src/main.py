@@ -612,6 +612,7 @@ async def home():
                     <option value="animegg">animegg</option>
                     <option value="mkissa">mkissa</option>
                     <option value="animeonsen">animeonsen</option>
+                    <option value="miruro">miruro</option>
                 </select>
                 <select class="in-url in-type">
                     <option value="sub">sub</option>
