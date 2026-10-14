@@ -1,0 +1,208 @@
+import {
+  AnimeCardData,
+  AnimeDetailData,
+  PaginationResponse,
+  SuggestionItem,
+  CharacterItem,
+  StaffItem,
+  RelationItem,
+  RecommendationItem,
+  ScheduleItem,
+  DaySchedule,
+  ReviewItem,
+  StreamExtractionResult,
+  ProviderStatus,
+} from "@/types/anime";
+import { User, WatchlistItem, HistoryItem, UserSettings } from "@/types/user";
+
+// Base API URL
+const API_BASE = typeof window === "undefined"
+  ? (process.env.INTERNAL_API_URL || "http://127.0.0.1:8000/api/v1")
+  : (process.env.NEXT_PUBLIC_API_URL || "/api/v1");
+
+interface FetchOptions extends RequestInit {
+  params?: Record<string, any>;
+  retries?: number;
+}
+
+async function request<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
+  const { params, retries = 1, ...customConfig } = options;
+
+  let url = `${API_BASE}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+  if (params) {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        searchParams.append(key, String(value));
+      }
+    });
+    const queryString = searchParams.toString();
+    if (queryString) {
+      url += (url.includes("?") ? "&" : "?") + queryString;
+    }
+  }
+
+  const isServer = typeof window === "undefined";
+  const isAuthOrUser = endpoint.startsWith("/auth") || endpoint.startsWith("/user");
+
+  const defaultHeaders: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+
+  const config: RequestInit = {
+    ...customConfig,
+    headers: {
+      ...defaultHeaders,
+      ...customConfig.headers,
+    },
+    ...(isAuthOrUser
+      ? { credentials: "include" as const, cache: "no-store" as const }
+      : isServer
+      ? { next: { revalidate: 300 } as any }
+      : {}),
+  };
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, config);
+
+      if (!response.ok) {
+        if (response.status === 429 && attempt < retries) {
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || errorData.message || `HTTP ${response.status} Error`);
+      }
+
+      return (await response.json()) as T;
+    } catch (err: any) {
+      if (attempt === retries) throw err;
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+    }
+  }
+
+  throw new Error("Network request failed after retries");
+}
+
+export const api = {
+  // Discovery
+  getSpotlight: () => request<AnimeCardData[]>("/anime/spotlight"),
+  getTrending: (page = 1, perPage = 20) =>
+    request<PaginationResponse<AnimeCardData>>("/anime/trending", { params: { page, perPage } }),
+  getPopular: (page = 1, perPage = 20) =>
+    request<PaginationResponse<AnimeCardData>>("/anime/popular", { params: { page, perPage } }),
+  getTopRated: (page = 1, perPage = 20) =>
+    request<PaginationResponse<AnimeCardData>>("/anime/top-rated", { params: { page, perPage } }),
+  getUpcoming: (page = 1, perPage = 20) =>
+    request<PaginationResponse<AnimeCardData>>("/anime/upcoming", { params: { page, perPage } }),
+  getTopAiring: (page = 1, perPage = 20) =>
+    request<PaginationResponse<AnimeCardData>>("/anime/top-airing", { params: { page, perPage } }),
+  getJustFinished: (page = 1, perPage = 20) =>
+    request<PaginationResponse<AnimeCardData>>("/anime/just-finished", { params: { page, perPage } }),
+  getTopMovies: (page = 1, perPage = 20) =>
+    request<PaginationResponse<AnimeCardData>>("/anime/top-movies", { params: { page, perPage } }),
+  getSeasonal: (year?: number, season?: string, page = 1, perPage = 24) =>
+    request<PaginationResponse<AnimeCardData>>("/anime/seasonal", { params: { year, season, page, perPage } }),
+  filterAnime: (params: Record<string, any>) =>
+    request<PaginationResponse<AnimeCardData>>("/anime/filter", { params }),
+  getGenres: () => request<string[]>("/anime/genres"),
+  getTags: () => request<Array<{ id: number; name: string; description: string; category: string }>>("/anime/tags"),
+  getRandomAnime: () => request<{ id: number; title: string }>("/anime/random"),
+
+  // Search
+  search: (q: string, page = 1, perPage = 24) =>
+    request<PaginationResponse<AnimeCardData>>("/search", { params: { q, page, perPage } }),
+  getSuggestions: (q: string) =>
+    request<SuggestionItem[]>("/search/suggestions", { params: { q } }),
+
+  // Detail
+  getAnimeDetail: (id: number | string) =>
+    request<AnimeDetailData>(`/anime/${id}`),
+  getAnimeCharacters: (id: number | string, page = 1, perPage = 25) =>
+    request<PaginationResponse<CharacterItem>>(`/anime/${id}/characters`, { params: { page, perPage } }),
+  getAnimeStaff: (id: number | string, page = 1, perPage = 25) =>
+    request<PaginationResponse<StaffItem>>(`/anime/${id}/staff`, { params: { page, perPage } }),
+  getAnimeRelations: (id: number | string) =>
+    request<RelationItem[]>(`/anime/${id}/relations`),
+  getAnimeRecommendations: (id: number | string, page = 1, perPage = 12) =>
+    request<PaginationResponse<RecommendationItem>>(`/anime/${id}/recommendations`, { params: { page, perPage } }),
+  getAnimeEpisodes: (id: number | string) =>
+    request<Array<{ number: number; title: string; thumbnail?: string; url?: string; site?: string; airingAt?: number; isAired?: boolean }>>(`/anime/${id}/episodes`),
+  getAnimeReviews: (id: number | string) =>
+    request<ReviewItem[]>(`/anime/${id}/reviews`),
+
+  // Schedule
+  getSchedule: (date?: string, tz?: string) =>
+    request<{ date: string; total: number; results: ScheduleItem[] }>("/schedule", { params: { date, tz } }),
+  getWeekSchedule: () => request<DaySchedule[]>("/schedule/week"),
+
+  // People & Studios
+  getCharacter: (id: number | string) => request<any>(`/character/${id}`),
+  getStaff: (id: number | string) => request<any>(`/staff/${id}`),
+  getStudio: (id: number | string, page = 1, perPage = 24) =>
+    request<any>(`/studio/${id}`, { params: { page, perPage } }),
+
+  // Auth
+  register: (data: { email: string; username: string; password: string }) =>
+    request<{ accessToken: string; tokenType: string; user: User }>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  login: (data: { email: string; password: string }) =>
+    request<{ accessToken: string; tokenType: string; user: User }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  logout: () => request<{ message: string }>("/auth/logout", { method: "POST" }),
+  getMe: () => request<User | null>("/auth/me"),
+
+  // User Library
+  getWatchlist: (status?: string) =>
+    request<WatchlistItem[]>("/user/watchlist", { params: { status } }),
+  updateWatchlist: (data: any) =>
+    request<WatchlistItem>("/user/watchlist", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  patchWatchlist: (animeId: number, data: any) =>
+    request<WatchlistItem>(`/user/watchlist/${animeId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  deleteWatchlistItem: (animeId: number) =>
+    request<{ message: string }>(`/user/watchlist/${animeId}`, {
+      method: "DELETE",
+    }),
+
+  getHistory: (limit = 20) =>
+    request<HistoryItem[]>("/user/history", { params: { limit } }),
+  updateHistory: (data: any) =>
+    request<HistoryItem | null>("/user/history", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  getSettings: () => request<UserSettings>("/user/settings"),
+  updateSettings: (data: Partial<UserSettings>) =>
+    request<UserSettings>("/user/settings", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  // Native Streaming & Extraction Engine (src/providers)
+  extractEpisode: (
+    animeId: number | string,
+    episode = 1,
+    type: "sub" | "dub" = "sub",
+    provider?: string
+  ) =>
+    request<StreamExtractionResult>(`/extract/${animeId}`, {
+      params: { e: episode, type, provider },
+      retries: 1,
+    }),
+  getStreamEpisodes: (animeId: number) =>
+    request<any>(`/episodes/${animeId}`),
+  getProviderStatus: () =>
+    request<ProviderStatus>("/providers/status"),
+};

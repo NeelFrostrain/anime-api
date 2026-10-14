@@ -4,6 +4,11 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.pytest_cache/
+
+# Databases
+*.db
+*.sqlite3
 
 # Virtual environments
 venv/
@@ -16,19 +21,25 @@ ENV/
 *.swp
 *.swo
 
-# Future plans
-FUTUREPLANDONTTOUCH/
-
 # OS
 .DS_Store
 Thumbs.db
 
 # Logs
 logs/
+backend/logs/
 *.log
 
-# Web (Next.js)
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
 web/node_modules/
 web/.next/
 web/out/
+
+# Environment
+.env
+.env.local
+.env.*.local
 
