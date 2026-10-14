@@ -23,6 +23,8 @@ import {
   Server,
   AlertTriangle,
   RefreshCw,
+  Star,
+  Mic,
 } from "lucide-react";
 import { AnimeDetailData, StreamExtractionResult } from "@/types/anime";
 import { VideoPlayer } from "@/components/watch/VideoPlayer";
@@ -153,6 +155,87 @@ export function WatchHubClient({
 
   // Available native extraction providers (all 11 + auto)
   const availableProviders = EXTRACTION_PROVIDERS.map((p) => p.id);
+
+  // Description expand / collapse state
+  const [showFullDesc, setShowFullDesc] = useState(false);
+
+  // Poster image for info card
+  const posterUrl =
+    anime.coverImage?.extraLarge ||
+    anime.coverImage?.large ||
+    anime.coverImage?.medium ||
+    anime.bannerImage ||
+    "";
+
+  // Formatted alternative titles
+  const alternativeTitles = React.useMemo(() => {
+    const list = [
+      anime.title.romaji,
+      anime.title.native,
+      ...(anime.synonyms || []),
+    ].filter((t): t is string => Boolean(t) && t !== title);
+    return Array.from(new Set(list)).join("; ");
+  }, [anime.title, anime.synonyms, title]);
+
+  // Clean description without raw HTML
+  const cleanDescription = React.useMemo(() => {
+    return (anime.description || "").replace(/<[^>]*>?/gm, "").trim();
+  }, [anime.description]);
+
+  // Premiered info
+  const premieredText =
+    anime.season && anime.seasonYear
+      ? `${anime.season} ${anime.seasonYear}`
+      : anime.seasonYear
+      ? `${anime.seasonYear}`
+      : anime.startDate?.year
+      ? `${anime.startDate.year}`
+      : "UNKNOWN";
+
+  // Aired date range
+  const airedDateText = React.useMemo(() => {
+    const formatD = (d: { year: number | null; month: number | null; day: number | null } | null) => {
+      if (!d || !d.year) return null;
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const m = d.month ? monthNames[d.month - 1] + " " : "";
+      const day = d.day ? `${d.day}, ` : "";
+      return `${m}${day}${d.year}`;
+    };
+    const s = formatD(anime.startDate);
+    const e = formatD(anime.endDate);
+    if (s && e && s !== e) return `${s} to ${e}`;
+    return s || (anime.seasonYear ? `${anime.seasonYear}` : "Unknown");
+  }, [anime.startDate, anime.endDate, anime.seasonYear]);
+
+  // Status label
+  const statusLabel =
+    anime.status === "RELEASING"
+      ? "Currently Airing"
+      : anime.status === "FINISHED"
+      ? "Finished Airing"
+      : anime.status === "NOT_YET_RELEASED"
+      ? "Not Yet Aired"
+      : anime.status === "CANCELLED"
+      ? "Cancelled"
+      : anime.status || "Unknown";
+
+  // Score
+  const scoreDisplay = anime.averageScore
+    ? `${(anime.averageScore / 10).toFixed(2)}`
+    : anime.meanScore
+    ? `${(anime.meanScore / 10).toFixed(2)}`
+    : null;
+
+  // Studios
+  const studioNames =
+    anime.studios && anime.studios.length > 0
+      ? anime.studios.map((s) => s.name).join(", ")
+      : "Unknown";
+
+  // Source
+  const sourceName = anime.source
+    ? anime.source.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+    : "Original";
 
   // Proactively check if DUB is available for this anime in background
   useEffect(() => {
@@ -369,7 +452,7 @@ export function WatchHubClient({
         </div>
 
         {/* Video Player & Episode Sidebar Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 2xl:grid-cols-5 gap-5 sm:gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 2xl:grid-cols-6 gap-6 sm:gap-7">
           {/* Main Video Area (3 cols / 4 cols on 2xl) */}
           <div className="lg:col-span-3 2xl:col-span-4 space-y-4 sm:space-y-5">
             {/* DUB Not Available Notification Toast */}
@@ -723,6 +806,175 @@ export function WatchHubClient({
                       Check legal platforms like Crunchyroll, Netflix, or HIDIVE.
                     </span>
                   )}
+                </div>
+              </div>
+            </div>
+
+            {/* Anime Detail Overview Card (Placed right after controls section) */}
+            <div className="rounded-xl border border-white/10 bg-[#131318] p-3.5 sm:p-5 shadow-sm">
+              <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
+                {/* Left: Poster Cover Image */}
+                {posterUrl && (
+                  <div className="relative w-28 sm:w-36 md:w-44 aspect-[2/3] shrink-0 overflow-hidden rounded-lg border border-white/10 shadow-lg bg-black/40">
+                    <Image
+                      src={posterUrl}
+                      alt={title}
+                      fill
+                      sizes="(max-width: 640px) 112px, 176px"
+                      className="object-cover transition-transform duration-300 hover:scale-105"
+                      priority
+                    />
+                  </div>
+                )}
+
+                {/* Right: Anime Details & Metadata */}
+                <div className="flex-1 min-w-0 space-y-2.5">
+                  {/* Title & Alternative Titles */}
+                  <div>
+                    <h2 className="text-lg sm:text-xl font-bold font-display text-white tracking-tight leading-snug">
+                      {title}
+                    </h2>
+                    {alternativeTitles && (
+                      <p className="text-xs text-zinc-400 italic line-clamp-1 mt-0.5" title={alternativeTitles}>
+                        {alternativeTitles}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Quality, Audio & Rating Badges Row */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {/* Age / Content Rating */}
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded border border-white/15 bg-white/5 text-zinc-300">
+                      {anime.isAdult ? "18+" : "PG-13"}
+                    </span>
+
+                    {/* HD Quality Badge */}
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                      HD
+                    </span>
+
+                    {/* CC Closed Captions / Subtitles Badge */}
+                    <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-cyan-500/15 border border-cyan-500/30 text-cyan-400">
+                      CC
+                    </span>
+
+                    {/* DUB Audio / Mic Badge */}
+                    {dubAvailable !== false && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 inline-flex items-center gap-1">
+                        <Mic className="h-2.5 w-2.5" />
+                        <span>DUB</span>
+                      </span>
+                    )}
+
+                    {/* Score Badge */}
+                    {scoreDisplay && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 inline-flex items-center gap-1">
+                        <Star className="h-2.5 w-2.5 fill-current" />
+                        <span>{scoreDisplay}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Synopsis / Description with [more]/[less] toggle */}
+                  {cleanDescription && (
+                    <div className="text-xs sm:text-[13px] text-zinc-300 leading-relaxed">
+                      <span>
+                        {cleanDescription.length > 200 && !showFullDesc
+                          ? `${cleanDescription.slice(0, 200)}...`
+                          : cleanDescription}
+                      </span>
+                      {cleanDescription.length > 200 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowFullDesc((prev) => !prev)}
+                          className="ml-1.5 text-[var(--accent)] hover:underline font-semibold text-xs cursor-pointer inline-block"
+                        >
+                          {showFullDesc ? "[less]" : "[more]"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 2-Column Metadata Grid matching user reference */}
+                  <div className="pt-2 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+                    {/* Left Column */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="font-semibold text-zinc-400 shrink-0">Type:</span>
+                        <span className="text-zinc-200 font-medium">{anime.format || "TV"}</span>
+                      </div>
+
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="font-semibold text-zinc-400 shrink-0">Premiered:</span>
+                        <span className="text-zinc-200 font-medium">{premieredText}</span>
+                      </div>
+
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="font-semibold text-zinc-400 shrink-0">Aired:</span>
+                        <span className="text-zinc-200">{airedDateText}</span>
+                      </div>
+
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="font-semibold text-zinc-400 shrink-0">Status:</span>
+                        <span className={`font-medium ${anime.status === "RELEASING" ? "text-emerald-400" : "text-zinc-200"}`}>
+                          {statusLabel}
+                        </span>
+                      </div>
+
+                      {anime.genres && anime.genres.length > 0 && (
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="font-semibold text-zinc-400 shrink-0">Genres:</span>
+                          <span className="text-zinc-300">
+                            {anime.genres.map((g, idx) => (
+                              <React.Fragment key={g}>
+                                <Link
+                                  href={`/search?genre=${encodeURIComponent(g)}`}
+                                  className="text-[var(--accent)] hover:underline font-medium"
+                                >
+                                  {g}
+                                </Link>
+                                {idx < anime.genres.length - 1 && ", "}
+                              </React.Fragment>
+                            ))}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right Column */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="font-semibold text-zinc-400 shrink-0">MAL:</span>
+                        <span className="text-zinc-200 font-medium">
+                          {scoreDisplay ? scoreDisplay : "N/A"}
+                        </span>
+                      </div>
+
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="font-semibold text-zinc-400 shrink-0">Duration:</span>
+                        <span className="text-zinc-200">
+                          {anime.duration ? `${anime.duration} min` : "? min"}
+                        </span>
+                      </div>
+
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="font-semibold text-zinc-400 shrink-0">Episodes:</span>
+                        <span className="text-zinc-200">
+                          {anime.episodes ? `${anime.episodes}` : `${playableEpisodes.length || "?"}`}
+                        </span>
+                      </div>
+
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="font-semibold text-zinc-400 shrink-0">Studios:</span>
+                        <span className="text-zinc-200 truncate">{studioNames}</span>
+                      </div>
+
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="font-semibold text-zinc-400 shrink-0">Producers:</span>
+                        <span className="text-zinc-200 truncate">{sourceName}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
