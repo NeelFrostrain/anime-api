@@ -43,6 +43,9 @@ interface VideoPlayerProps {
   activeProvider?: string;
   onProviderChange?: (provider: string) => void;
   availableProviders?: string[];
+  playerMode?: "stream" | "embed";
+  onPlayerModeChange?: (mode: "stream" | "embed") => void;
+  hideTopBar?: boolean;
   autoPlay?: boolean;
   autoNext?: boolean;
   autoSkipIntro?: boolean;
@@ -64,6 +67,9 @@ export function VideoPlayer({
   activeProvider = "auto",
   onProviderChange,
   availableProviders = [],
+  playerMode: propPlayerMode,
+  onPlayerModeChange,
+  hideTopBar = true,
   autoPlay = true,
   autoNext = true,
   autoSkipIntro = false,
@@ -73,7 +79,12 @@ export function VideoPlayer({
   isLoadingStreams = false,
   onRetry,
 }: VideoPlayerProps) {
-  const [playerMode, setPlayerMode] = useState<"stream" | "embed">("stream");
+  const [internalPlayerMode, setInternalPlayerMode] = useState<"stream" | "embed">(propPlayerMode || "stream");
+  const playerMode = propPlayerMode !== undefined ? propPlayerMode : internalPlayerMode;
+  const setPlayerMode = (mode: "stream" | "embed") => {
+    setInternalPlayerMode(mode);
+    onPlayerModeChange?.(mode);
+  };
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -865,139 +876,141 @@ export function VideoPlayer({
 
   return (
     <div className={`space-y-2 sub-size-${subSize}`}>
-      {/* Top Controls Header Bar - Elevated z-index & visible overflow so dropdown floats above video */}
-      <div className="relative z-30 flex items-center justify-between gap-1.5 sm:gap-2 bg-[#131318] border border-white/10 rounded-md p-1.5 sm:p-2">
-        {/* Left: Mode Buttons (Stream, Embed) */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-          <button
-            onClick={() => {
-              setPlayerMode("stream");
-              if (activeStream?.type === "embed") {
-                const streamIdx = streams.findIndex((s) => s.type !== "embed");
-                if (streamIdx !== -1) setSelectedStreamIdx(streamIdx);
-              }
-            }}
-            className={`flex items-center gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-bold whitespace-nowrap transition-all ${
-              playerMode === "stream"
-                ? "bg-[var(--accent)] text-white"
-                : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
-            }`}
-          >
-            <Zap className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-400 shrink-0" />
-            <span>Fast Stream</span>
-          </button>
-
-          {activeEmbedUrl && (
+      {/* Top Controls Header Bar - Optional, hidden by default when unified below player */}
+      {!hideTopBar && (
+        <div className="relative z-30 flex items-center justify-between gap-1.5 sm:gap-2 bg-[#131318] border border-white/10 rounded-md p-1.5 sm:p-2">
+          {/* Left: Mode Buttons (Stream, Embed) */}
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <button
-              onClick={() => setPlayerMode("embed")}
-              className={`flex items-center gap-1 sm:gap-1.5 rounded-md px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-bold whitespace-nowrap transition-all ${
-                playerMode === "embed"
-                  ? "bg-[var(--accent)] text-white"
+              onClick={() => {
+                setPlayerMode("stream");
+                if (activeStream?.type === "embed") {
+                  const streamIdx = streams.findIndex((s) => s.type !== "embed");
+                  if (streamIdx !== -1) setSelectedStreamIdx(streamIdx);
+                }
+              }}
+              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition-all ${
+                playerMode === "stream"
+                  ? "bg-[var(--accent)] text-white shadow-sm"
                   : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
               }`}
             >
-              <Layers className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" />
-              <span>Embed</span>
+              <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+              <span>Fast Stream</span>
             </button>
-          )}
-        </div>
 
-        {/* Right: Server Selector, Audio Selector, Refresh, Shortcuts */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-          {/* Server Selector Dropdown */}
-          {availableProviders && availableProviders.length > 0 && (
-            <div ref={topServerMenuRef} className="relative">
+            {activeEmbedUrl && (
               <button
-                type="button"
-                onClick={() => setShowTopServerMenu(!showTopServerMenu)}
-                className={`flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] sm:text-xs font-semibold transition-all ${
-                  showTopServerMenu
-                    ? "bg-white/15 border-white/30 text-white shadow-sm"
-                    : "bg-white/5 border-white/10 text-zinc-300 hover:text-white hover:bg-white/10"
+                onClick={() => setPlayerMode("embed")}
+                className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition-all ${
+                  playerMode === "embed"
+                    ? "bg-[var(--accent)] text-white shadow-sm"
+                    : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
                 }`}
-                title="Change Server"
               >
-                <Server className="h-3 w-3 text-amber-400 shrink-0" />
-                <span className="truncate max-w-[110px]">{PROVIDER_NAMES[activeProvider] || activeProvider || "SERVER"}</span>
-                <ChevronDown className={`h-3 w-3 text-zinc-400 shrink-0 transition-transform duration-200 ${showTopServerMenu ? "rotate-180 text-white" : ""}`} />
+                <Layers className="h-3.5 w-3.5 shrink-0" />
+                <span>Embed</span>
               </button>
-
-              {showTopServerMenu && (
-                <div className="absolute right-0 top-full mt-1.5 w-48 max-h-72 overflow-y-auto scrollbar-thin rounded-md bg-[#18181f] border border-white/20 p-1.5 z-50 space-y-0.5 shadow-2xl backdrop-blur-md">
-                  <span className="text-[10px] uppercase font-bold text-zinc-400 px-2 py-1 block border-b border-white/10 sticky top-0 bg-[#18181f] z-10">
-                    Select Server
-                  </span>
-                  {availableProviders.map((prov) => (
-                    <button
-                      key={prov}
-                      type="button"
-                      onClick={() => {
-                        onProviderChange?.(prov);
-                        setShowTopServerMenu(false);
-                      }}
-                      className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                        activeProvider === prov
-                          ? "bg-[var(--accent)] text-white font-bold shadow-sm"
-                          : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                      }`}
-                    >
-                      <span className="truncate">{PROVIDER_NAMES[prov] || prov}</span>
-                      {activeProvider === prov && <Check className="h-3.5 w-3.5 shrink-0 ml-1.5 text-white" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Audio Sub / Dub Toggle */}
-          <div className="flex items-center rounded-md bg-white/5 border border-white/10 p-0.5">
-            <button
-              onClick={() => onAudioChange("sub")}
-              className={`rounded px-1.5 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-xs font-bold whitespace-nowrap transition-all ${
-                activeAudio === "sub"
-                  ? "bg-[var(--accent)] text-white"
-                  : "text-zinc-400 hover:text-white"
-              }`}
-            >
-              SUB
-            </button>
-            <button
-              disabled={isDubAvailable === false}
-              onClick={() => isDubAvailable !== false && onAudioChange("dub")}
-              title={isDubAvailable === false ? "DUB not available for this anime" : "Switch to English DUB"}
-              className={`rounded px-1.5 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-xs font-bold whitespace-nowrap transition-all ${
-                isDubAvailable === false
-                  ? "opacity-35 cursor-not-allowed text-zinc-500 line-through"
-                  : activeAudio === "dub"
-                  ? "bg-[var(--accent)] text-white"
-                  : "text-zinc-400 hover:text-white"
-              }`}
-            >
-              DUB
-            </button>
+            )}
           </div>
 
-          {/* Quick Reload Video */}
-          <button
-            type="button"
-            onClick={handleRetryPlayback}
-            className="flex items-center gap-1 text-xs text-zinc-400 hover:text-white transition-colors p-1.5 rounded-md hover:bg-white/5"
-            title="Reload Video Stream"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </button>
+          {/* Right: Server Selector, Audio Selector, Refresh, Shortcuts */}
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+            {/* Server Selector Dropdown */}
+            {availableProviders && availableProviders.length > 0 && (
+              <div ref={topServerMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowTopServerMenu(!showTopServerMenu)}
+                  className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold transition-all ${
+                    showTopServerMenu
+                      ? "bg-white/15 border-white/30 text-white shadow-sm"
+                      : "bg-white/5 border-white/10 text-zinc-300 hover:text-white hover:bg-white/10"
+                  }`}
+                  title="Change Server"
+                >
+                  <Server className="h-3 w-3 text-amber-400 shrink-0" />
+                  <span className="truncate max-w-[110px]">{PROVIDER_NAMES[activeProvider] || activeProvider || "SERVER"}</span>
+                  <ChevronDown className={`h-3 w-3 text-zinc-400 shrink-0 transition-transform duration-200 ${showTopServerMenu ? "rotate-180 text-white" : ""}`} />
+                </button>
 
-          {/* Shortcuts Help */}
-          <button
-            onClick={() => setShowShortcuts(!showShortcuts)}
-            className="hidden sm:flex items-center gap-1 text-xs text-zinc-400 hover:text-white transition-colors p-1.5 rounded-md hover:bg-white/5"
-            title="Keyboard Shortcuts"
-          >
-            <HelpCircle className="h-4 w-4" />
-          </button>
+                {showTopServerMenu && (
+                  <div className="absolute right-0 top-full mt-1.5 w-48 max-h-72 overflow-y-auto scrollbar-thin rounded-md bg-[#18181f] border border-white/20 p-1.5 z-50 space-y-0.5 shadow-2xl backdrop-blur-md">
+                    <span className="text-[10px] uppercase font-bold text-zinc-400 px-2 py-1 block border-b border-white/10 sticky top-0 bg-[#18181f] z-10">
+                      Select Server
+                    </span>
+                    {availableProviders.map((prov) => (
+                      <button
+                        key={prov}
+                        type="button"
+                        onClick={() => {
+                          onProviderChange?.(prov);
+                          setShowTopServerMenu(false);
+                        }}
+                        className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                          activeProvider === prov
+                            ? "bg-[var(--accent)] text-white font-bold shadow-sm"
+                            : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <span className="truncate">{PROVIDER_NAMES[prov] || prov}</span>
+                        {activeProvider === prov && <Check className="h-3.5 w-3.5 shrink-0 ml-1.5 text-white" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Audio Sub / Dub Toggle */}
+            <div className="flex items-center rounded-md bg-white/5 border border-white/10 p-0.5">
+              <button
+                onClick={() => onAudioChange("sub")}
+                className={`rounded px-2 py-0.5 text-xs font-bold whitespace-nowrap transition-all ${
+                  activeAudio === "sub"
+                    ? "bg-[var(--accent)] text-white shadow-sm"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                SUB
+              </button>
+              <button
+                disabled={isDubAvailable === false}
+                onClick={() => isDubAvailable !== false && onAudioChange("dub")}
+                title={isDubAvailable === false ? "DUB not available for this anime" : "Switch to English DUB"}
+                className={`rounded px-2 py-0.5 text-xs font-bold whitespace-nowrap transition-all ${
+                  isDubAvailable === false
+                    ? "opacity-35 cursor-not-allowed text-zinc-500 line-through"
+                    : activeAudio === "dub"
+                    ? "bg-[var(--accent)] text-white shadow-sm"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                DUB
+              </button>
+            </div>
+
+            {/* Quick Reload Video */}
+            <button
+              type="button"
+              onClick={handleRetryPlayback}
+              className="flex items-center gap-1 text-xs text-zinc-400 hover:text-white transition-colors p-1 rounded-md hover:bg-white/5"
+              title="Reload Video Stream"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+
+            {/* Shortcuts Help */}
+            <button
+              onClick={() => setShowShortcuts(!showShortcuts)}
+              className="hidden sm:flex items-center gap-1 text-xs text-zinc-400 hover:text-white transition-colors p-1 rounded-md hover:bg-white/5"
+              title="Keyboard Shortcuts"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main Video Screen Container */}
       <div

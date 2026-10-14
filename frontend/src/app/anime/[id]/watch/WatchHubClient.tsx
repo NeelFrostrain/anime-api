@@ -17,6 +17,7 @@ import {
   Play,
   RotateCcw,
   Zap,
+  Layers,
   Globe,
   Server,
   AlertTriangle,
@@ -59,6 +60,7 @@ export function WatchHubClient({
   // Audio & Provider options
   const [audio, setAudio] = useState<"sub" | "dub">("sub");
   const [provider, setProvider] = useState<string>("auto");
+  const [playerMode, setPlayerMode] = useState<"stream" | "embed">("stream");
 
   // Automation options
   const [autoPlay, setAutoPlay] = useState(true);
@@ -70,6 +72,11 @@ export function WatchHubClient({
   const [streamResult, setStreamResult] = useState<StreamExtractionResult | null>(initialStream || null);
   const [isExtracting, setIsExtracting] = useState(!initialStream);
   const [extractError, setExtractError] = useState<string | null>(null);
+
+  // Determine if embed fallback or stream is available
+  const hasEmbed = Boolean(
+    streamResult?.streams?.some((s) => s.type === "embed" || Boolean(s.embed))
+  );
 
   const mounted = useMounted();
   const { getItem, updateItem, addItem } = useWatchlistStore();
@@ -404,6 +411,9 @@ export function WatchHubClient({
               activeProvider={provider}
               onProviderChange={setProvider}
               availableProviders={availableProviders}
+              playerMode={playerMode}
+              onPlayerModeChange={setPlayerMode}
+              hideTopBar={true}
               autoPlay={autoPlay}
               autoNext={autoNext}
               autoSkipIntro={autoSkipIntro}
@@ -414,185 +424,209 @@ export function WatchHubClient({
               onRetry={() => fetchStream(currentEpNum, audio, provider)}
             />
 
-            {/* Stream Options Control Bar: Audio, Server & Automation options */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-4 rounded-md border border-white/10 bg-[#131318] p-4 sm:p-5 text-xs w-full overflow-hidden shadow-sm">
-              {/* 1. Audio Sub / Dub Selector */}
-              <div className="space-y-1.5">
-                <span className="font-bold text-white block text-[11px]">Audio Mode</span>
-                <div className="grid grid-cols-2 gap-2">
+            {/* Unified Playback, Episode Navigation & Source Hub */}
+            <div className="rounded-xl border border-white/10 bg-[#131318] p-2 sm:p-2.5 space-y-2 shadow-sm">
+              {/* Row 1: Unified Quick Controls Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
+                {/* 1. Episode Navigation (Prev / Counter / Next) */}
+                <div className="flex items-center gap-1 shrink-0">
                   <button
-                    onClick={() => setAudio("sub")}
-                    className={`flex items-center justify-center gap-1 rounded-md py-2 text-xs font-bold transition-all ${
-                      audio === "sub"
-                        ? "bg-[var(--accent)] text-white shadow-sm"
-                        : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10"
-                    }`}
+                    disabled={playableEpisodes.length === 0 || currentEpNum <= (playableEpisodes[0]?.number || 1)}
+                    onClick={() => {
+                      const currentIdx = playableEpisodes.findIndex((e) => e.number === currentEpNum);
+                      if (currentIdx > 0) {
+                        selectEpisode(playableEpisodes[currentIdx - 1].number);
+                      }
+                    }}
+                    className="flex items-center gap-1 rounded border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    title="Previous Episode"
                   >
-                    <span>SUB</span>
+                    <ChevronLeft className="h-3 w-3 shrink-0" />
+                    <span>Prev</span>
                   </button>
+
+                  <div className="px-2 py-0.5 rounded bg-white/[0.04] border border-white/5 text-center">
+                    <span className="text-xs font-mono font-bold text-zinc-200 whitespace-nowrap">
+                      EP {currentEpNum} <span className="text-zinc-600 font-normal">/</span> {playableEpisodes.length || anime.episodes || "?"}
+                    </span>
+                  </div>
+
                   <button
-                    disabled={dubAvailable === false}
-                    onClick={() => dubAvailable !== false && setAudio("dub")}
-                    title={dubAvailable === false ? "DUB not available for this anime" : "Switch to English DUB"}
-                    className={`flex items-center justify-center gap-1.5 rounded-md py-2 text-xs font-bold transition-all ${
-                      dubAvailable === false
-                        ? "border border-white/5 bg-white/[0.02] text-zinc-500 opacity-35 cursor-not-allowed"
-                        : audio === "dub"
-                        ? "bg-[var(--accent)] text-white shadow-sm"
-                        : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10"
-                    }`}
+                    disabled={
+                      playableEpisodes.length === 0 ||
+                      currentEpNum >= (playableEpisodes[playableEpisodes.length - 1]?.number || currentEpNum)
+                    }
+                    onClick={() => {
+                      const currentIdx = playableEpisodes.findIndex((e) => e.number === currentEpNum);
+                      if (currentIdx !== -1 && currentIdx < playableEpisodes.length - 1) {
+                        selectEpisode(playableEpisodes[currentIdx + 1].number);
+                      }
+                    }}
+                    className="flex items-center gap-1 rounded bg-[var(--accent)] hover:brightness-110 text-white font-semibold text-xs px-2 py-1 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                    title="Next Episode"
                   >
-                    <span>DUB</span>
-                    {dubAvailable === false && (
-                      <span className="text-[9px] font-normal text-zinc-500 lowercase">(n/a)</span>
-                    )}
+                    <span>Next</span>
+                    <ChevronRight className="h-3 w-3 shrink-0" />
                   </button>
                 </div>
-              </div>
 
-              {/* 2. Provider Server Selector */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-white text-[11px]">Extraction Server</span>
-                  {streamResult?.provider && (
-                    <span className="font-mono text-[10px] text-emerald-400 font-semibold">
-                      Won: {PROVIDER_NAMES[streamResult.provider] || streamResult.provider}
-                    </span>
+                {/* 2. Stream / Embed Mode Switcher */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => setPlayerMode("stream")}
+                    className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold whitespace-nowrap transition-all ${
+                      playerMode === "stream"
+                        ? "bg-[var(--accent)] text-white shadow-sm"
+                        : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    <Zap className="h-3 w-3 text-amber-400 shrink-0" />
+                    <span>Fast Stream</span>
+                  </button>
+
+                  {hasEmbed && (
+                    <button
+                      onClick={() => setPlayerMode("embed")}
+                      className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold whitespace-nowrap transition-all ${
+                        playerMode === "embed"
+                          ? "bg-[var(--accent)] text-white shadow-sm"
+                          : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      <Layers className="h-3 w-3 shrink-0" />
+                      <span>Embed</span>
+                    </button>
                   )}
                 </div>
-                <select
-                  value={provider}
-                  onChange={(e) => setProvider(e.target.value)}
-                  className="w-full rounded-md border border-white/10 bg-black/60 px-3 py-2 text-xs font-semibold text-zinc-200 outline-none focus:border-[var(--accent)] transition-colors"
-                >
-                  {EXTRACTION_PROVIDERS.map((p) => (
-                    <option key={p.id} value={p.id} className="bg-[#131318] text-white">
-                      {p.id === "auto" ? p.name : `${p.name} (${p.detail})`}
-                    </option>
-                  ))}
-                </select>
-              </div>
 
-              {/* 3. Automation Toggles */}
-              <div className="space-y-1.5">
-                <span className="font-bold text-white block text-[11px]">Automation</span>
-                <div className="flex items-center gap-2">
+                {/* 3. Audio & Extraction Server Selector */}
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* SUB / DUB Toggle */}
+                  <div className="flex items-center rounded bg-white/5 border border-white/10 p-0.5">
+                    <button
+                      onClick={() => setAudio("sub")}
+                      className={`rounded px-2 py-0.5 text-xs font-bold transition-all ${
+                        audio === "sub"
+                          ? "bg-[var(--accent)] text-white shadow-sm"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      SUB
+                    </button>
+                    <button
+                      disabled={dubAvailable === false}
+                      onClick={() => dubAvailable !== false && setAudio("dub")}
+                      title={dubAvailable === false ? "DUB not available for this anime" : "Switch to English DUB"}
+                      className={`rounded px-2 py-0.5 text-xs font-bold transition-all ${
+                        dubAvailable === false
+                          ? "opacity-30 cursor-not-allowed text-zinc-500 line-through"
+                          : audio === "dub"
+                          ? "bg-[var(--accent)] text-white shadow-sm"
+                          : "text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      DUB
+                    </button>
+                  </div>
+
+                  {/* Extraction Server Select */}
+                  <div className="flex items-center gap-1">
+                    <select
+                      value={provider}
+                      onChange={(e) => setProvider(e.target.value)}
+                      className="rounded border border-white/10 bg-black/60 px-2 py-1 text-xs font-semibold text-zinc-200 outline-none focus:border-[var(--accent)] transition-colors max-w-[125px] sm:max-w-[150px] truncate"
+                    >
+                      {EXTRACTION_PROVIDERS.map((p) => (
+                        <option key={p.id} value={p.id} className="bg-[#131318] text-white">
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    {streamResult?.provider && (
+                      <span className="hidden xl:inline font-mono text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-1.5 py-0.5 font-semibold">
+                        Won: {PROVIDER_NAMES[streamResult.provider] || streamResult.provider}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4. Automation Toggles & Reload */}
+                <div className="flex items-center gap-1 shrink-0">
                   <button
                     onClick={() => handleAutoToggle("autoNext")}
-                    className={`flex-1 rounded-md py-2 text-xs font-bold transition-all ${
+                    className={`rounded px-2 py-1 text-[11px] font-bold transition-all ${
                       autoNext
                         ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
                         : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
                     }`}
+                    title="Toggle Auto-Play Next Episode"
                   >
                     Auto-Next
                   </button>
                   <button
                     onClick={() => handleAutoToggle("autoSkipIntro")}
-                    className={`flex-1 rounded-md py-2 text-xs font-bold transition-all ${
+                    className={`rounded px-2 py-1 text-[11px] font-bold transition-all ${
                       autoSkipIntro
                         ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
                         : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
                     }`}
+                    title="Skip Opening Credits (+85s)"
                   >
                     Auto-Skip (+85s)
                   </button>
+
+                  <button
+                    onClick={() => fetchStream(currentEpNum, audio, provider)}
+                    className="rounded border border-white/10 bg-white/5 p-1 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                    title="Reload Stream"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </div>
-            </div>
 
-            {/* Prev / Next Episode Bar */}
-            <div className="flex items-center justify-between gap-2.5 rounded-md border border-white/10 bg-[#131318] p-2.5 sm:p-3 w-full overflow-hidden shadow-sm">
-              <button
-                disabled={playableEpisodes.length === 0 || currentEpNum <= (playableEpisodes[0]?.number || 1)}
-                onClick={() => {
-                  const currentIdx = playableEpisodes.findIndex((e) => e.number === currentEpNum);
-                  if (currentIdx > 0) {
-                    selectEpisode(playableEpisodes[currentIdx - 1].number);
-                  }
-                }}
-                className="flex items-center justify-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 sm:px-4 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none transition-colors shrink-0 whitespace-nowrap"
-              >
-                <ChevronLeft className="h-4 w-4 shrink-0" />
-                <span className="hidden sm:inline">Prev Episode</span>
-                <span className="sm:hidden">Prev</span>
-              </button>
-
-              <div className="text-center px-2 min-w-0 overflow-hidden">
-                <span className="text-xs font-mono font-bold text-zinc-300 whitespace-nowrap block truncate">
-                  EP {currentEpNum} <span className="text-zinc-600 font-normal">/</span> {playableEpisodes.length || anime.episodes || "?"}
-                </span>
-              </div>
-
-              <button
-                disabled={
-                  playableEpisodes.length === 0 ||
-                  currentEpNum >= (playableEpisodes[playableEpisodes.length - 1]?.number || currentEpNum)
-                }
-                onClick={() => {
-                  const currentIdx = playableEpisodes.findIndex((e) => e.number === currentEpNum);
-                  if (currentIdx !== -1 && currentIdx < playableEpisodes.length - 1) {
-                    selectEpisode(playableEpisodes[currentIdx + 1].number);
-                  }
-                }}
-                className="flex items-center justify-center gap-1.5 rounded-md bg-[var(--accent)] hover:brightness-110 text-white font-semibold text-xs px-3 sm:px-4 py-2 transition-all disabled:opacity-40 disabled:pointer-events-none shrink-0 whitespace-nowrap"
-              >
-                <span className="hidden sm:inline">Next Episode</span>
-                <span className="sm:hidden">Next</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </button>
-            </div>
-
-            {/* Next Airing Countdown for releasing shows */}
-            {nextEp && (
-              <div className="flex items-center gap-2.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-2.5 sm:p-3 text-emerald-400">
-                <Calendar className="h-4 w-4 shrink-0" />
-                <div className="text-xs">
-                  <span className="font-bold">Next Episode #{nextEp.episode}</span> will broadcast in{" "}
-                  <span className="font-mono font-bold underline">
-                    {formatTimeUntil(nextEp.timeUntilAiring)}
-                  </span>
-                  . Stay tuned!
-                </div>
-              </div>
-            )}
-
-            {/* Official Legal Partners */}
-            <div className="rounded-md border border-white/10 bg-[#131318] p-3.5 sm:p-4 space-y-2.5">
-              <div className="flex items-center gap-2 border-b border-white/10 pb-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                <h3 className="font-display font-bold text-sm text-white">
-                  Official Licensed Streaming Distributors
-                </h3>
-              </div>
-              <p className="text-xs text-zinc-400">
-                Support the creators by viewing licensed high-definition releases on official distribution platforms:
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
-                {anime.streamingLinks && anime.streamingLinks.length > 0 ? (
-                  anime.streamingLinks.map((link) => (
-                    <a
-                      key={link.id}
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group flex items-center justify-between rounded-md border border-white/10 bg-white/5 p-3.5 hover:border-[var(--accent)] hover:bg-[var(--accent)]/10 hover:shadow-glow transition-all"
-                    >
-                      <div>
-                        <span className="text-xs font-bold text-white group-hover:text-[var(--accent)] block">
-                          {link.site}
-                        </span>
-                        <span className="text-[10px] text-zinc-500">Official Partner</span>
-                      </div>
-                      <ExternalLink className="h-4 w-4 text-zinc-400 group-hover:text-white" />
-                    </a>
-                  ))
-                ) : (
-                  <div className="col-span-full py-4 text-xs text-zinc-500">
-                    Check major legal anime distributors like Crunchyroll, Netflix, or HIDIVE for regional licensing availability.
+              {/* Next Airing Countdown for releasing shows */}
+              {nextEp && (
+                <div className="flex items-center gap-1.5 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-400 text-xs">
+                  <Calendar className="h-3 w-3 shrink-0" />
+                  <div>
+                    <span className="font-bold">Next Episode #{nextEp.episode}</span> airs in{" "}
+                    <span className="font-mono font-bold underline">
+                      {formatTimeUntil(nextEp.timeUntilAiring)}
+                    </span>
+                    .
                   </div>
-                )}
+                </div>
+              )}
+
+              {/* Official Licensed Streaming Distributors */}
+              <div className="pt-1.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-1.5">
+                <div className="flex items-center gap-1 text-[11px] font-bold text-zinc-300 uppercase tracking-wider">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                  <span>Official Distributors:</span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1">
+                  {anime.streamingLinks && anime.streamingLinks.length > 0 ? (
+                    anime.streamingLinks.map((link) => (
+                      <a
+                        key={link.id}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group inline-flex items-center gap-1 rounded border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium text-zinc-300 hover:border-[var(--accent)] hover:text-white hover:bg-[var(--accent)]/10 transition-all"
+                      >
+                        <span className="font-semibold text-white group-hover:text-[var(--accent)]">{link.site}</span>
+                        <ExternalLink className="h-2.5 w-2.5 text-zinc-500 group-hover:text-white shrink-0" />
+                      </a>
+                    ))
+                  ) : (
+                    <span className="text-[11px] text-zinc-500">
+                      Check legal platforms like Crunchyroll, Netflix, or HIDIVE.
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
