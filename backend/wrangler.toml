@@ -10,12 +10,12 @@ port = 8000
 [[d1_databases]]
 binding = "DB"
 database_name = "anime-d1"
-database_id = "00000000-0000-0000-0000-000000000001"
+database_id = "2c0ca9be-57b1-4582-a31f-f08395ed7031"
 
 # Cloudflare Workers KV Binding
 [[kv_namespaces]]
 binding = "KV"
-id = "ANIME_CACHE_ID"
+id = "76166cc1792d4b299b741516921e0833"
 
 [vars]
 APP_NAME = "Kuromi"

@@ -368,6 +368,12 @@ query GetAnimeDetail($id: Int!) {
       site
       thumbnail
     }
+    streamingEpisodes {
+      title
+      thumbnail
+      url
+      site
+    }
     studios(isMain: true) {
       nodes {
         id
@@ -696,7 +702,7 @@ export async function queryAniList<T = any>(
     headers: {
       "Content-Type": "application/json",
       "Accept": "application/json",
-      "User-Agent": "KuromiWorker/2.0 (+https://github.com/NeelFrostrain/anime-api)",
+      "User-Agent": "KuromiApp/2.0 (https://kuromi-anime.com)",
     },
     body: JSON.stringify({ query, variables }),
   });

@@ -208,6 +208,8 @@ export function VideoPlayer({
     }
   }, [subtitles, selectedSubUrl]);
 
+  const lastLoadedUrlRef = useRef<string | null>(null);
+
   // Attempt reliable autoplay with muted fallback if browser blocks unmuted playback
   const attemptAutoplay = useCallback((videoEl: HTMLVideoElement) => {
     if (!autoPlay) return;
@@ -220,21 +222,29 @@ export function VideoPlayer({
           setHasFatalError(false);
         })
         .catch((err) => {
-          console.warn("[VideoPlayer] Unmuted autoplay blocked by browser policy, attempting muted autoplay...", err);
-          videoEl.muted = true;
-          setIsMuted(true);
-          videoEl
-            .play()
-            .then(() => {
-              setIsPlaying(true);
-              setIsBuffering(false);
-              setHasFatalError(false);
-            })
-            .catch((err2) => {
-              console.warn("[VideoPlayer] Muted autoplay was also blocked:", err2);
-              setIsPlaying(false);
-              setIsBuffering(false);
-            });
+          // AbortError is triggered when a new load request interrupts play. It is benign.
+          if (err?.name === "AbortError") {
+            return;
+          }
+          // Only attempt muted autoplay if blocked by browser policy (NotAllowedError)
+          if (err?.name === "NotAllowedError") {
+            videoEl.muted = true;
+            setIsMuted(true);
+            videoEl
+              .play()
+              .then(() => {
+                setIsPlaying(true);
+                setIsBuffering(false);
+                setHasFatalError(false);
+              })
+              .catch((err2) => {
+                if (err2?.name !== "AbortError") {
+                  console.warn("[VideoPlayer] Autoplay was prevented by browser policy:", err2);
+                }
+                setIsPlaying(false);
+                setIsBuffering(false);
+              });
+          }
         });
     }
   }, [autoPlay]);
@@ -251,7 +261,8 @@ export function VideoPlayer({
     stallCountRef.current = 0;
     lastPlayTimeRef.current = -1;
     triedStreamsRef.current.clear();
-  }, [episodeNumber, streams]);
+    lastLoadedUrlRef.current = null;
+  }, [episodeNumber, activeAudio, activeProvider]);
 
   // Seamless auto-recovery when a stream fails, 404s, 500s or hangs (without infinite loops)
   const handleAutoRecoverStream = useCallback(() => {
@@ -433,10 +444,9 @@ export function VideoPlayer({
       if (videoRef.current) {
         try {
           videoRef.current.pause();
-          videoRef.current.removeAttribute("src");
-          videoRef.current.load();
         } catch {}
       }
+      lastLoadedUrlRef.current = null;
       setIsPlaying(false);
       setIsBuffering(false);
       setCurrentTime(0);
@@ -451,6 +461,21 @@ export function VideoPlayer({
     const video = videoRef.current;
     if (!video) return;
 
+    const currentStream = streams[selectedStreamIdx] || streams[0];
+    if (currentStream?.type === "embed" && currentStream?.url) {
+      setPlayerMode("embed");
+      return;
+    }
+
+    const playableUrl = getPlayableStreamUrl(currentStream);
+    if (!playableUrl) return;
+
+    // Prevent destroying active playback if this exact URL is already playing
+    if (lastLoadedUrlRef.current === playableUrl && (hlsRef.current || video.src)) {
+      return;
+    }
+    lastLoadedUrlRef.current = playableUrl;
+
     if (hlsRef.current) {
       try {
         hlsRef.current.destroy();
@@ -464,18 +489,10 @@ export function VideoPlayer({
       dashRef.current = null;
     }
 
-    const currentStream = streams[selectedStreamIdx] || streams[0];
-    if (currentStream?.type === "embed" && currentStream?.url) {
-      setPlayerMode("embed");
-      return;
-    }
-
     // Reset playback tracker for new stream
     stallCountRef.current = 0;
     lastPlayTimeRef.current = -1;
     setIsBuffering(true);
-
-    const playableUrl = getPlayableStreamUrl(currentStream);
     const isM3U8 = playableUrl.includes("proxy_m3u8") || playableUrl.includes(".m3u8") || currentStream?.type === "hls";
     const isMPD = playableUrl.includes(".mpd") || currentStream?.type === "dash";
 

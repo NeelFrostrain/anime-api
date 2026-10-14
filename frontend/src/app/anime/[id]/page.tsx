@@ -48,25 +48,94 @@ export default async function AnimeDetailPage({ params, searchParams }: Props) {
   const animeId = parseInt(id.split("-")[0]);
   if (isNaN(animeId)) notFound();
 
-  const [
-    anime,
-    episodes,
-    relations,
-    charactersData,
-    staffData,
-    recommendationsData,
-    reviews,
-  ] = await Promise.all([
-    api.getAnimeDetail(animeId).catch(() => null),
-    api.getAnimeEpisodes(animeId).catch(() => []),
-    api.getAnimeRelations(animeId).catch(() => []),
-    api.getAnimeCharacters(animeId, 1, 24).catch(() => ({ results: [] })),
-    api.getAnimeStaff(animeId, 1, 24).catch(() => ({ results: [] })),
-    api.getAnimeRecommendations(animeId, 1, 12).catch(() => ({ results: [] })),
-    api.getAnimeReviews(animeId).catch(() => []),
+  // 1. Fetch anime detail (single cached query)
+  const anime = await api.getAnimeDetail(animeId).catch(() => null);
+  if (!anime) notFound();
+
+  // 2. Fetch episodes with AniZip screenshots and reviews with fast timeout
+  const [episodes, reviews] = await Promise.all([
+    api.getAnimeEpisodes(animeId, anime).catch(() => []),
+    api.getAnimeReviews(animeId, anime.idMal).catch(() => []),
   ]);
 
-  if (!anime) notFound();
+  // Derive characters, staff, relations, and recommendations in memory from anime detail (0ms delay)
+  const rawCharacters = (anime.characters as any)?.edges || [];
+  const charactersData = {
+    page: 1,
+    perPage: 24,
+    total: rawCharacters.length,
+    hasNextPage: false,
+    results: rawCharacters.map((e: any) => ({
+      id: e.node?.id,
+      role: e.role,
+      name: {
+        full: e.node?.name?.userPreferred || "",
+        native: e.node?.name?.native || "",
+      },
+      image: e.node?.image?.large || e.node?.image?.medium || "",
+      voiceActors: (e.voiceActors || []).map((va: any) => ({
+        id: va.id,
+        name: va.name?.userPreferred || "",
+        native: va.name?.native || null,
+        language: va.languageV2 || "Japanese",
+        image: va.image?.large || va.image?.medium || "",
+      })),
+    })),
+  };
+
+  const rawStudios = Array.isArray(anime.studios)
+    ? anime.studios
+    : (anime.studios as any)?.nodes || [];
+  const staffData = {
+    page: 1,
+    perPage: 24,
+    total: rawStudios.length,
+    hasNextPage: false,
+    results: rawStudios.map((s: any) => ({
+      id: s.id,
+      role: s.isAnimationStudio ? "Animation Studio" : "Studio",
+      name: { full: s.name, native: "" },
+      image: "",
+      occupations: [],
+    })),
+  };
+
+  const rawRelations = (anime.relations as any)?.edges || [];
+  const relations = rawRelations.map((edge: any) => ({
+    relationType: edge.relationType,
+    id: edge.node?.id,
+    title: edge.node?.title,
+    format: edge.node?.format,
+    status: edge.node?.status,
+    coverImage: edge.node?.coverImage,
+    averageScore: edge.node?.averageScore,
+    year: edge.node?.startDate?.year,
+  }));
+
+  const rawRecs = (anime.recommendations as any)?.nodes || [];
+  const recommendationsData = {
+    page: 1,
+    perPage: 12,
+    total: rawRecs.length,
+    hasNextPage: false,
+    results: rawRecs
+      .filter((n: any) => n.mediaRecommendation)
+      .map((n: any) => {
+        const rec = n.mediaRecommendation;
+        return {
+          id: rec.id,
+          rating: n.rating,
+          userRating: n.userRating,
+          title: rec.title,
+          coverImage: rec.coverImage,
+          format: rec.format,
+          status: rec.status,
+          episodes: rec.episodes,
+          averageScore: rec.averageScore,
+          year: rec.startDate?.year,
+        };
+      }),
+  };
 
   const title = anime.title.english || anime.title.romaji || "Anime";
 

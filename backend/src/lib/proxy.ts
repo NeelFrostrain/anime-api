@@ -49,7 +49,10 @@ export function rewriteM3u8(manifest: string, baseUrl: string, referer: string, 
         const rewrittenTag = line.replace(/URI="([^"]+)"/, (_, uri) => {
           try {
             const absoluteUri = new URL(uri, baseUrl).href;
-            const proxied = `${origin}/proxy_segment?url=${encodeURIComponent(absoluteUri)}&referer=${encodeURIComponent(referer)}`;
+            const isSubManifest = absoluteUri.includes(".m3u8") || uri.includes(".m3u8");
+            const proxied = isSubManifest
+              ? `${origin}/proxy_m3u8?url=${encodeURIComponent(absoluteUri)}&referer=${encodeURIComponent(referer)}`
+              : `${origin}/proxy_segment?url=${encodeURIComponent(absoluteUri)}&referer=${encodeURIComponent(referer)}`;
             return `URI="${proxied}"`;
           } catch {
             return `URI="${uri}"`;

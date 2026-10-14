@@ -282,7 +282,18 @@ animeRoutes.get("/anime/:id", async (c) => {
   const media = data?.Media;
   if (!media) return c.json({ error: "NotFound" }, 404);
 
-  return c.json(media);
+  const rawStudios =
+    media.studios?.nodes ||
+    media.studios?.edges?.map((e: any) => e.node) ||
+    (Array.isArray(media.studios) ? media.studios : []);
+  const studios = rawStudios.map((s: any) => ({
+    id: s.id,
+    name: s.name,
+    isMain: s.isMain !== undefined ? s.isMain : true,
+    isAnimationStudio: Boolean(s.isAnimationStudio),
+  }));
+
+  return c.json({ ...media, studios });
 });
 
 // GET /anime/:id/characters
@@ -388,41 +399,55 @@ animeRoutes.get("/anime/:id/episodes", async (c) => {
   const id = parseInt(c.req.param("id"), 10);
   if (isNaN(id)) return c.json({ error: "InvalidId" }, 400);
 
-  const data = await queryAniList(DETAIL_QUERY, { id }, c.env.KV, `anime_detail_${id}`, 3600);
+  const [data, anizipData] = await Promise.all([
+    queryAniList(DETAIL_QUERY, { id }, c.env.KV, `anime_detail_${id}`, 3600),
+    fetch(`https://api.ani.zip/mappings?anilist_id=${id}`, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(3500),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null),
+  ]);
+
   const media = data?.Media;
   if (!media) return c.json({ error: "NotFound" }, 404);
 
   const streaming = media.streamingEpisodes || [];
-  const totalEpisodes = media.episodes || streaming.length || 12;
+  const anizipEps = (anizipData as any)?.episodes || {};
+  const anizipCount = Object.keys(anizipEps).length;
+  const totalEpisodes = media.episodes || streaming.length || anizipCount || 12;
   const episodes: any[] = [];
 
-  if (streaming.length > 0) {
-    for (let idx = 0; idx < streaming.length; idx++) {
-      const item = streaming[idx];
-      const epNum = idx + 1;
-      episodes.push({
-        number: epNum,
-        title: item.title || `Episode ${epNum}`,
-        thumbnail: item.thumbnail,
-        url: item.url,
-        site: item.site,
-        airingAt: null,
-        isAired: true,
-      });
-    }
-  } else {
-    const displayCount = Math.min(totalEpisodes, 500);
-    for (let epNum = 1; epNum <= displayCount; epNum++) {
-      episodes.push({
-        number: epNum,
-        title: `Episode ${epNum}`,
-        thumbnail: media.coverImage?.large,
-        url: null,
-        site: null,
-        airingAt: null,
-        isAired: true,
-      });
-    }
+  const displayCount = Math.min(totalEpisodes, 1500);
+  for (let epNum = 1; epNum <= displayCount; epNum++) {
+    const az = anizipEps[String(epNum)] || anizipEps[epNum];
+    const streamItem = streaming[epNum - 1];
+
+    const epTitle =
+      az?.title?.en ||
+      az?.title?.ja ||
+      az?.title?.["x-jat"] ||
+      streamItem?.title ||
+      `Episode ${epNum}`;
+
+    const epThumbnail =
+      az?.image ||
+      streamItem?.thumbnail ||
+      media.coverImage?.extraLarge ||
+      media.coverImage?.large;
+
+    const epOverview = az?.overview || null;
+
+    episodes.push({
+      number: epNum,
+      title: epTitle,
+      thumbnail: epThumbnail,
+      description: epOverview,
+      url: streamItem?.url || null,
+      site: streamItem?.site || null,
+      airingAt: az?.airDateUtc ? Math.floor(new Date(az.airDateUtc).getTime() / 1000) : null,
+      isAired: true,
+    });
   }
 
   return c.json(episodes);

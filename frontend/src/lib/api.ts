@@ -196,14 +196,14 @@ export const api = {
       ? anilist.getAnimeRecommendations(id, page, perPage)
       : request<PaginationResponse<RecommendationItem>>(`/anime/${id}/recommendations`, { params: { page, perPage } }),
 
-  getAnimeEpisodes: (id: number | string) =>
+  getAnimeEpisodes: (id: number | string, existingMedia?: any) =>
     typeof window === "undefined"
-      ? anilist.getAnimeEpisodes(id)
+      ? anilist.getAnimeEpisodes(id, existingMedia)
       : request<Array<{ number: number; title: string; thumbnail?: string; url?: string; site?: string; airingAt?: number; isAired?: boolean }>>(`/anime/${id}/episodes`),
 
-  getAnimeReviews: (id: number | string) =>
+  getAnimeReviews: (id: number | string, malId?: number | null) =>
     typeof window === "undefined"
-      ? anilist.getAnimeReviews(id)
+      ? anilist.getAnimeReviews(id, malId)
       : request<ReviewItem[]>(`/anime/${id}/reviews`),
 
   // Schedule
