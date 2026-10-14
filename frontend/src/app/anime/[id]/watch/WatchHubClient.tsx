@@ -545,85 +545,90 @@ export function WatchHubClient({
             {/* Unified Playback, Episode Navigation & Source Hub */}
             <div className="rounded-md border border-white/10 bg-[#131318] p-2 sm:p-2.5 space-y-2 shadow-sm relative z-30">
               {/* Row 1: Unified Quick Controls Bar */}
-              <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
-                {/* 1. Episode Navigation (Prev / Counter / Next) */}
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    disabled={playableEpisodes.length === 0 || currentEpNum <= (playableEpisodes[0]?.number || 1)}
-                    onClick={() => {
-                      const currentIdx = playableEpisodes.findIndex((e) => e.number === currentEpNum);
-                      if (currentIdx > 0) {
-                        selectEpisode(playableEpisodes[currentIdx - 1].number);
-                      }
-                    }}
-                    className="flex items-center gap-1 rounded border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                    title="Previous Episode"
-                  >
-                    <ChevronLeft className="h-3 w-3 shrink-0" />
-                    <span>Prev</span>
-                  </button>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                {/* Left Side: Episode Navigation & Stream Mode */}
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
+                  {/* Episode Navigation (Prev / EP / Next) */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      disabled={playableEpisodes.length === 0 || currentEpNum <= (playableEpisodes[0]?.number || 1)}
+                      onClick={() => {
+                        const currentIdx = playableEpisodes.findIndex((e) => e.number === currentEpNum);
+                        if (currentIdx > 0) {
+                          selectEpisode(playableEpisodes[currentIdx - 1].number);
+                        }
+                      }}
+                      className="h-7 px-2.5 flex items-center gap-1 rounded border border-white/10 bg-white/5 text-xs font-semibold text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                      title="Previous Episode"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5 shrink-0" />
+                      <span>Prev</span>
+                    </button>
 
-                  <div className="px-2 rounded bg-white/[0.04] border border-white/5 text-center">
-                    <span className="text-xs font-mono font-bold text-zinc-200 whitespace-nowrap">
-                      EP {currentEpNum} <span className="text-zinc-600 font-normal">/</span> {playableEpisodes.length || anime.episodes || "?"}
-                    </span>
+                    <div className="h-7 px-2.5 flex items-center justify-center rounded bg-white/[0.04] border border-white/10 text-center">
+                      <span className="text-xs font-mono font-bold text-zinc-200 whitespace-nowrap">
+                        EP {currentEpNum} <span className="text-zinc-600 font-normal">/</span> {playableEpisodes.length || anime.episodes || "?"}
+                      </span>
+                    </div>
+
+                    <button
+                      disabled={
+                        playableEpisodes.length === 0 ||
+                        currentEpNum >= (playableEpisodes[playableEpisodes.length - 1]?.number || currentEpNum)
+                      }
+                      onClick={() => {
+                        const currentIdx = playableEpisodes.findIndex((e) => e.number === currentEpNum);
+                        if (currentIdx !== -1 && currentIdx < playableEpisodes.length - 1) {
+                          selectEpisode(playableEpisodes[currentIdx + 1].number);
+                        }
+                      }}
+                      className="h-7 px-2.5 flex items-center gap-1 rounded bg-[var(--accent)] hover:brightness-110 text-white font-semibold text-xs transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
+                      title="Next Episode"
+                    >
+                      <span>Next</span>
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                    </button>
                   </div>
 
-                  <button
-                    disabled={
-                      playableEpisodes.length === 0 ||
-                      currentEpNum >= (playableEpisodes[playableEpisodes.length - 1]?.number || currentEpNum)
-                    }
-                    onClick={() => {
-                      const currentIdx = playableEpisodes.findIndex((e) => e.number === currentEpNum);
-                      if (currentIdx !== -1 && currentIdx < playableEpisodes.length - 1) {
-                        selectEpisode(playableEpisodes[currentIdx + 1].number);
-                      }
-                    }}
-                    className="flex items-center gap-1 rounded bg-[var(--accent)] hover:brightness-110 text-white font-semibold text-xs px-2 py-1 transition-all disabled:opacity-30 disabled:pointer-events-none"
-                    title="Next Episode"
-                  >
-                    <span>Next</span>
-                    <ChevronRight className="h-3 w-3 shrink-0" />
-                  </button>
-                </div>
+                  <div className="h-4 w-px bg-white/10 hidden sm:block mx-0.5 shrink-0" />
 
-                {/* 2. Stream / Embed Mode Switcher */}
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => setPlayerMode("stream")}
-                    className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold whitespace-nowrap transition-all ${
-                      playerMode === "stream"
-                        ? "bg-[var(--accent)] text-white shadow-sm"
-                        : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
-                    }`}
-                  >
-                    <Zap className="h-3 w-3 text-amber-400 shrink-0" />
-                    <span>Fast Stream</span>
-                  </button>
-
-                  {hasEmbed && (
+                  {/* Stream / Embed Mode Switcher */}
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={() => setPlayerMode("embed")}
-                      className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold whitespace-nowrap transition-all ${
-                        playerMode === "embed"
+                      onClick={() => setPlayerMode("stream")}
+                      className={`h-7 px-2.5 flex items-center gap-1.5 rounded text-xs font-semibold whitespace-nowrap transition-all ${
+                        playerMode === "stream"
                           ? "bg-[var(--accent)] text-white shadow-sm"
                           : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
                       }`}
                     >
-                      <Layers className="h-3 w-3 shrink-0" />
-                      <span>Embed</span>
+                      <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                      <span>Fast Stream</span>
                     </button>
-                  )}
+
+                    {hasEmbed && (
+                      <button
+                        onClick={() => setPlayerMode("embed")}
+                        className={`h-7 px-2.5 flex items-center gap-1.5 rounded text-xs font-semibold whitespace-nowrap transition-all ${
+                          playerMode === "embed"
+                            ? "bg-[var(--accent)] text-white shadow-sm"
+                            : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
+                        }`}
+                      >
+                        <Layers className="h-3.5 w-3.5 shrink-0" />
+                        <span>Embed</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {/* 3. Audio & Extraction Server Selector */}
-                <div className="flex items-center gap-1 shrink-0">
+                {/* Right Side: Audio, Server, Automation & Quick Actions */}
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
                   {/* SUB / DUB Toggle */}
-                  <div className="flex items-center rounded bg-white/5 border border-white/10 p-0.5">
+                  <div className="h-7 flex items-center rounded bg-white/5 border border-white/10 p-0.5 shrink-0">
                     <button
                       onClick={() => setAudio("sub")}
-                      className={`rounded px-2 py-0.5 text-xs font-bold transition-all ${
+                      className={`h-full rounded px-2.5 text-xs font-bold transition-all flex items-center justify-center ${
                         audio === "sub"
                           ? "bg-[var(--accent)] text-white shadow-sm"
                           : "text-zinc-400 hover:text-white"
@@ -635,7 +640,7 @@ export function WatchHubClient({
                       disabled={dubAvailable === false}
                       onClick={() => dubAvailable !== false && setAudio("dub")}
                       title={dubAvailable === false ? "DUB not available for this anime" : "Switch to English DUB"}
-                      className={`rounded px-2 py-0.5 text-xs font-bold transition-all ${
+                      className={`h-full rounded px-2.5 text-xs font-bold transition-all flex items-center justify-center ${
                         dubAvailable === false
                           ? "opacity-30 cursor-not-allowed text-zinc-500 line-through"
                           : audio === "dub"
@@ -648,137 +653,138 @@ export function WatchHubClient({
                   </div>
 
                   {/* Custom Extraction Server Dropdown */}
-                  <div className="flex items-center gap-1.5">
-                    <div ref={serverDropdownRef} className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowServerDropdown((prev) => !prev)}
-                        className={`flex items-center gap-1 rounded border px-2 py-1 text-xs font-semibold transition-all select-none ${
-                          showServerDropdown
-                            ? "bg-white/15 border-white/30 text-white shadow-sm ring-1 ring-[var(--accent)]/40"
-                            : "border-white/10 bg-black/60 text-zinc-200 hover:text-white hover:bg-white/10"
-                        }`}
-                        title="Change Extraction Server"
-                        aria-expanded={showServerDropdown}
-                      >
-                        <Server className="h-3 w-3 text-amber-400 shrink-0" />
-                        <span className="truncate max-w-[105px] sm:max-w-[135px]">
-                          {EXTRACTION_PROVIDERS.find((p) => p.id === provider)?.name || PROVIDER_NAMES[provider] || provider}
-                        </span>
-                        <ChevronDown
-                          className={`h-3 w-3 text-zinc-400 shrink-0 transition-transform duration-200 ${
-                            showServerDropdown ? "rotate-180 text-white" : ""
-                          }`}
-                        />
-                      </button>
-
-                      {showServerDropdown && (
-                        <div
-                          className={`absolute left-0 sm:left-auto sm:right-0 ${
-                            dropdownDirection === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5"
-                          } w-52 max-h-64 overflow-y-auto scrollbar-thin rounded-lg bg-[#141419]/95 border border-white/20 p-1.5 z-[100] space-y-0.5 shadow-2xl backdrop-blur-md`}
-                        >
-                          <div className="flex items-center justify-between px-2 py-1 border-b border-white/10 sticky top-0 bg-[#141419]/95 backdrop-blur-md z-10">
-                            <span className="text-[10px] uppercase font-bold text-zinc-400">
-                              Extraction Server
-                            </span>
-                            <span className="text-[9px] font-mono text-zinc-500">
-                              {EXTRACTION_PROVIDERS.length} Available
-                            </span>
-                          </div>
-
-                          <div className="pt-1 space-y-0.5">
-                            {EXTRACTION_PROVIDERS.map((p) => {
-                              const isSelected = provider === p.id;
-                              const isWinner = streamResult?.provider === p.id;
-                              return (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setProvider(p.id);
-                                    setShowServerDropdown(false);
-                                  }}
-                                  className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                                    isSelected
-                                      ? "bg-[var(--accent)] text-white font-bold shadow-sm"
-                                      : "text-zinc-300 hover:bg-white/10 hover:text-white"
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-1.5 truncate">
-                                    <span className="truncate">{p.name}</span>
-                                    {p.id === "auto" && (
-                                      <span
-                                        className={`text-[9px] px-1 py-0.5 rounded font-mono ${
-                                          isSelected
-                                            ? "bg-white/20 text-white"
-                                            : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                                        }`}
-                                      >
-                                        Fastest
-                                      </span>
-                                    )}
-                                    {isWinner && p.id !== "auto" && (
-                                      <span
-                                        className={`text-[9px] px-1 py-0.5 rounded font-mono ${
-                                          isSelected
-                                            ? "bg-white/20 text-white"
-                                            : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                        }`}
-                                      >
-                                        Active
-                                      </span>
-                                    )}
-                                  </div>
-                                  {isSelected && <Check className="h-3.5 w-3.5 shrink-0 ml-1.5 text-white" />}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {streamResult?.provider && (
-                      <span className="hidden xl:inline font-mono text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-1.5 py-0.5 font-semibold">
-                        Won: {PROVIDER_NAMES[streamResult.provider] || streamResult.provider}
+                  <div ref={serverDropdownRef} className="relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowServerDropdown((prev) => !prev)}
+                      className={`h-7 flex items-center gap-1.5 rounded border px-2.5 text-xs font-semibold transition-all select-none ${
+                        showServerDropdown
+                          ? "bg-white/15 border-white/30 text-white shadow-sm ring-1 ring-[var(--accent)]/40"
+                          : "border-white/10 bg-black/60 text-zinc-200 hover:text-white hover:bg-white/10"
+                      }`}
+                      title="Change Extraction Server"
+                      aria-expanded={showServerDropdown}
+                    >
+                      <Server className="h-3 w-3 text-amber-400 shrink-0" />
+                      <span className="truncate max-w-[105px] sm:max-w-[135px]">
+                        {EXTRACTION_PROVIDERS.find((p) => p.id === provider)?.name || PROVIDER_NAMES[provider] || provider}
                       </span>
+                      <ChevronDown
+                        className={`h-3 w-3 text-zinc-400 shrink-0 transition-transform duration-200 ${
+                          showServerDropdown ? "rotate-180 text-white" : ""
+                        }`}
+                      />
+                    </button>
+
+                    {showServerDropdown && (
+                      <div
+                        className={`absolute left-0 sm:left-auto sm:right-0 ${
+                          dropdownDirection === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5"
+                        } w-52 max-h-64 overflow-y-auto scrollbar-thin rounded-lg bg-[#141419]/95 border border-white/20 p-1.5 z-[100] space-y-0.5 shadow-2xl backdrop-blur-md`}
+                      >
+                        <div className="flex items-center justify-between px-2 py-1 border-b border-white/10 sticky top-0 bg-[#141419]/95 backdrop-blur-md z-10">
+                          <span className="text-[10px] uppercase font-bold text-zinc-400">
+                            Extraction Server
+                          </span>
+                          <span className="text-[9px] font-mono text-zinc-500">
+                            {EXTRACTION_PROVIDERS.length} Available
+                          </span>
+                        </div>
+
+                        <div className="pt-1 space-y-0.5">
+                          {EXTRACTION_PROVIDERS.map((p) => {
+                            const isSelected = provider === p.id;
+                            const isWinner = streamResult?.provider === p.id;
+                            return (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => {
+                                  setProvider(p.id);
+                                  setShowServerDropdown(false);
+                                }}
+                                className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                                  isSelected
+                                    ? "bg-[var(--accent)] text-white font-bold shadow-sm"
+                                    : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                                }`}
+                              >
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <span className="truncate">{p.name}</span>
+                                  {p.id === "auto" && (
+                                    <span
+                                      className={`text-[9px] px-1 py-0.5 rounded font-mono ${
+                                        isSelected
+                                          ? "bg-white/20 text-white"
+                                          : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                      }`}
+                                    >
+                                      Fastest
+                                    </span>
+                                  )}
+                                  {isWinner && p.id !== "auto" && (
+                                    <span
+                                      className={`text-[9px] px-1 py-0.5 rounded font-mono ${
+                                        isSelected
+                                          ? "bg-white/20 text-white"
+                                          : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                      }`}
+                                    >
+                                      Active
+                                    </span>
+                                  )}
+                                </div>
+                                {isSelected && <Check className="h-3.5 w-3.5 shrink-0 ml-1.5 text-white" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     )}
                   </div>
-                </div>
 
-                {/* 4. Automation Toggles & Reload */}
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => handleAutoToggle("autoNext")}
-                    className={`rounded px-2 py-1 text-[11px] font-bold transition-all ${
-                      autoNext
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                        : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
-                    }`}
-                    title="Toggle Auto-Play Next Episode"
-                  >
-                    Auto-Next
-                  </button>
-                  <button
-                    onClick={() => handleAutoToggle("autoSkipIntro")}
-                    className={`rounded px-2 py-1 text-[11px] font-bold transition-all ${
-                      autoSkipIntro
-                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                        : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
-                    }`}
-                    title="Skip Opening Credits (+85s)"
-                  >
-                    Auto-Skip (+85s)
-                  </button>
+                  {/* Won Provider Indicator */}
+                  {streamResult?.provider && (
+                    <div className="h-7 hidden xl:flex items-center px-2 font-mono text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded font-semibold shrink-0">
+                      Won: {PROVIDER_NAMES[streamResult.provider] || streamResult.provider}
+                    </div>
+                  )}
 
-                  <button
-                    onClick={() => fetchStream(currentEpNum, audio, provider)}
-                    className="rounded border border-white/10 bg-white/5 p-1 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
-                    title="Reload Stream"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="h-4 w-px bg-white/10 hidden sm:block mx-0.5 shrink-0" />
+
+                  {/* Automation Toggles & Reload */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => handleAutoToggle("autoNext")}
+                      className={`h-7 px-2.5 flex items-center rounded text-xs font-bold transition-all ${
+                        autoNext
+                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
+                          : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
+                      }`}
+                      title="Toggle Auto-Play Next Episode"
+                    >
+                      Auto-Next
+                    </button>
+                    <button
+                      onClick={() => handleAutoToggle("autoSkipIntro")}
+                      className={`h-7 px-2.5 flex items-center rounded text-xs font-bold transition-all ${
+                        autoSkipIntro
+                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
+                          : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
+                      }`}
+                      title="Skip Opening Credits (+85s)"
+                    >
+                      Auto-Skip (+85s)
+                    </button>
+
+                    <button
+                      onClick={() => fetchStream(currentEpNum, audio, provider)}
+                      className="h-7 w-7 flex items-center justify-center rounded border border-white/10 bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+                      title="Reload Stream"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
