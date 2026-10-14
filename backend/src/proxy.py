@@ -21,6 +21,7 @@ _proxy_client: httpx.AsyncClient | None = None
 
 def get_proxy_client() -> httpx.AsyncClient:
     global _proxy_client
+    if _proxy_client is None or _proxy_client.is_closed:
         _proxy_client = httpx.AsyncClient(
             timeout=httpx.Timeout(connect=5.0, read=12.0, write=10.0, pool=15.0),
             limits=httpx.Limits(max_keepalive_connections=100, max_connections=150, keepalive_expiry=120.0),

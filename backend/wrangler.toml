@@ -1,0 +1,25 @@
+name = "anime-api"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[dev]
+port = 8000
+
+# Cloudflare D1 Database Binding
+[[d1_databases]]
+binding = "DB"
+database_name = "anime-d1"
+database_id = "00000000-0000-0000-0000-000000000001"
+
+# Cloudflare Workers KV Binding
+[[kv_namespaces]]
+binding = "KV"
+id = "ANIME_CACHE_ID"
+
+[vars]
+APP_NAME = "Kuromi"
+JWT_SECRET = "kuromi_super_secret_jwt_key_cf_worker_2026"
+ACCESS_TOKEN_EXPIRE_SECONDS = "604800" # 7 days
+COOKIE_NAME = "kuromi_token"
+ANILIST_GRAPHQL_URL = "https://graphql.anilist.co"

@@ -58,32 +58,32 @@ export function TopSidebar({ topAiring, upcoming }: TopSidebarProps) {
               className="group flex items-center gap-3 rounded-md p-2 transition-colors hover:bg-white/5"
             >
               {/* Rank Number */}
-              <span className={`w-5 text-center font-display font-extrabold text-xs shrink-0 ${
+              <span className={`w-6 text-center font-display font-extrabold text-xs sm:text-sm shrink-0 ${
                 index === 0 ? "text-amber-400" : index === 1 ? "text-zinc-300" : index === 2 ? "text-amber-600" : "text-zinc-500"
               }`}>
                 {index + 1}
               </span>
 
               {/* Poster Thumb */}
-              <div className="relative h-14 w-10 shrink-0 overflow-hidden rounded-md bg-zinc-800 border border-white/10">
+              <div className="relative h-16 w-11 shrink-0 overflow-hidden rounded-md bg-zinc-800 border border-white/10 shadow-sm">
                 {poster ? (
                   <Image
                     src={poster}
                     alt={title}
                     fill
-                    className="object-cover transition-transform group-hover:scale-105"
-                    sizes="40px"
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    sizes="48px"
                   />
                 ) : null}
               </div>
 
               {/* Info */}
-              <div className="flex-1 min-w-0">
-                <h4 className="line-clamp-1 text-xs sm:text-[13px] font-semibold text-zinc-100 group-hover:text-[var(--accent)] transition-colors leading-snug">
+              <div className="flex-1 min-w-0 pr-1">
+                <h4 className="line-clamp-2 text-xs sm:text-[13px] font-semibold text-zinc-100 group-hover:text-[var(--accent)] transition-colors leading-snug">
                   {title}
                 </h4>
-                <div className="flex items-center gap-2 text-[11px] text-zinc-400 mt-1">
-                  {anime.format && <span className="uppercase">{anime.format}</span>}
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-400 mt-1">
+                  {anime.format && <span className="uppercase font-medium text-zinc-400">{anime.format}</span>}
                   {(anime.startDate?.year || anime.seasonYear) && (
                     <span>• {anime.startDate?.year || anime.seasonYear}</span>
                   )}

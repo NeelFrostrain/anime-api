@@ -69,19 +69,19 @@ export function ScheduleWidget({ weekDays }: ScheduleWidgetProps) {
                 className="group flex items-center justify-between rounded-md border border-white/5 bg-white/[0.02] p-2 sm:p-2.5 hover:border-white/15 hover:bg-white/5 transition-all gap-3"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="relative h-14 w-10 shrink-0 overflow-hidden rounded-md bg-zinc-800 border border-white/10">
+                  <div className="relative h-16 w-11 shrink-0 overflow-hidden rounded-md bg-zinc-800 border border-white/10 shadow-sm">
                     {poster && (
                       <Image
                         src={poster}
                         alt={title}
                         fill
-                        className="object-cover transition-transform group-hover:scale-105"
-                        sizes="40px"
+                        className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        sizes="48px"
                       />
                     )}
                   </div>
-                  <div className="min-w-0">
-                    <p className="line-clamp-1 text-xs sm:text-[13px] font-semibold text-zinc-100 group-hover:text-[var(--accent)] transition-colors leading-snug">
+                  <div className="min-w-0 pr-1">
+                    <p className="line-clamp-2 text-xs sm:text-[13px] font-semibold text-zinc-100 group-hover:text-[var(--accent)] transition-colors leading-snug">
                       {title}
                     </p>
                     <span className="text-[11px] font-medium text-emerald-400 mt-0.5 block">

@@ -26,6 +26,7 @@ import {
   RefreshCw,
   Radio,
   AlertTriangle,
+  X,
 } from "lucide-react";
 import { ClassicAnimeLoader } from "@/components/ui/ClassicAnimeLoader";
 import { formatDuration } from "@/lib/utils";
@@ -142,6 +143,7 @@ export function VideoPlayer({
 
   // Menu Popups
   const [activeMenu, setActiveMenu] = useState<"settings" | "subtitles" | "audio" | "servers" | "auto" | "booster" | null>(null);
+  const activeMenuRef = useRef<HTMLDivElement>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [hasAutoSkipped, setHasAutoSkipped] = useState(false);
@@ -149,6 +151,37 @@ export function VideoPlayer({
   const userPausedRef = useRef(false);
   const stallCountRef = useRef(0);
   const lastPlayTimeRef = useRef(-1);
+
+  // Close active popup menu on outside click, touch, or Escape
+  useEffect(() => {
+    if (!activeMenu) return;
+
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (
+        activeMenuRef.current &&
+        !activeMenuRef.current.contains(e.target as Node)
+      ) {
+        setActiveMenu(null);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setActiveMenu(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeMenu]);
 
   const activeStream = streams[selectedStreamIdx] || streams[0];
   const activeEmbedUrl =
@@ -357,20 +390,28 @@ export function VideoPlayer({
       return "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"; // CC Fallback
     }
 
-    const rawUrl = stream.url;
-    const isM3U8 = rawUrl.includes(".m3u8") || stream.type === "hls" || stream.isM3U8;
+    const streamUrl = stream.url;
+    // If it's already a proxied URL, return it directly
+    if (streamUrl.startsWith("/proxy_m3u8") || streamUrl.includes("/proxy_m3u8")) {
+      return streamUrl;
+    }
+
+    const targetUrl = (stream as any).rawUrl || streamUrl;
+    const isM3U8 = targetUrl.includes(".m3u8") || stream.type === "hls" || stream.isM3U8;
 
     if (isM3U8) {
-      // Route through m3u8 proxy
-      return `/proxy_m3u8?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent(stream.referer || "")}&audio=${activeAudio}`;
+      return `/proxy_m3u8?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(stream.referer || "")}&audio=${activeAudio}`;
     }
 
-    // Direct MP4 / other video formats must route through proxy_segment with referer to bypass hotlink 403/500
-    if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
-      return `/proxy_segment?url=${encodeURIComponent(rawUrl)}&referer=${encodeURIComponent(stream.referer || "")}&audio=${activeAudio}`;
+    if (streamUrl.startsWith("/proxy_segment") || streamUrl.includes("/proxy_segment")) {
+      return streamUrl;
     }
 
-    return rawUrl;
+    if (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) {
+      return `/proxy_segment?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(stream.referer || "")}&audio=${activeAudio}`;
+    }
+
+    return streamUrl;
   }, [activeAudio]);
 
   // Stop and cleanup when stream extraction starts or streams are empty
@@ -828,6 +869,22 @@ export function VideoPlayer({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName)) return;
+
+      if (e.key === "Escape") {
+        if (activeMenu) {
+          e.preventDefault();
+          setActiveMenu(null);
+        }
+        if (showShortcuts) {
+          e.preventDefault();
+          setShowShortcuts(false);
+        }
+        if (showTopServerMenu) {
+          e.preventDefault();
+          setShowTopServerMenu(false);
+        }
+        return;
+      }
 
       if (e.code === "Space") {
         e.preventDefault();
@@ -1366,12 +1423,15 @@ export function VideoPlayer({
                       />
 
                       {/* Booster Pill & Popover Menu */}
-                      <div className="relative">
+                      <div
+                        ref={activeMenu === "booster" ? activeMenuRef : undefined}
+                        className="relative"
+                      >
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setActiveMenu(activeMenu === "booster" ? null : "booster");
+                            setActiveMenu((prev) => (prev === "booster" ? null : "booster"));
                           }}
                           className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-mono font-bold transition-all ${
                             volumeBoost > 1
@@ -1388,16 +1448,30 @@ export function VideoPlayer({
                         {activeMenu === "booster" && (
                           <div
                             onClick={(e) => e.stopPropagation()}
-                            className="absolute left-0 bottom-10 w-56 sm:w-60 rounded-md border border-white/15 bg-[#131318]/95 backdrop-blur-md p-3 z-50 text-xs space-y-3"
+                            className="absolute left-0 bottom-10 w-56 sm:w-60 max-w-[calc(100vw-32px)] rounded-md border border-white/15 bg-[#131318]/95 backdrop-blur-md p-3 z-50 text-xs space-y-3 shadow-2xl"
                           >
                             <div className="flex items-center justify-between border-b border-white/10 pb-2">
                               <div className="flex items-center gap-1.5 font-bold text-white">
                                 <Zap className="h-4 w-4 text-amber-400 fill-amber-400" />
                                 <span>Volume Booster</span>
                               </div>
-                              <span className="font-mono text-xs font-bold text-amber-400">
-                                {Math.round(volumeBoost * 100)}%
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-bold text-amber-400">
+                                  {Math.round(volumeBoost * 100)}%
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveMenu(null);
+                                  }}
+                                  className="text-zinc-400 hover:text-white hover:bg-white/10 rounded p-1 transition-colors"
+                                  title="Close (Esc)"
+                                  aria-label="Close Volume Booster"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                             </div>
 
                             {/* Range Slider */}
@@ -1462,9 +1536,15 @@ export function VideoPlayer({
                   {/* Right Controls: Auto, Subtitles, Servers, Settings, Fullscreen */}
                   <div className="relative flex items-center gap-1.5 sm:gap-3 shrink-0">
                     {/* Auto Options Button */}
-                    <div className="relative">
+                    <div
+                      ref={activeMenu === "auto" ? activeMenuRef : undefined}
+                      className="relative"
+                    >
                       <button
-                        onClick={() => setActiveMenu(activeMenu === "auto" ? null : "auto")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenu((prev) => (prev === "auto" ? null : "auto"));
+                        }}
                         className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md transition-colors ${
                           activeMenu === "auto" || autoSkipIntro || autoNext
                             ? "bg-[var(--accent)] text-white"
@@ -1478,10 +1558,25 @@ export function VideoPlayer({
 
                       {/* Auto Options Popup Menu */}
                       {activeMenu === "auto" && (
-                        <div className="absolute right-0 bottom-10 w-52 rounded-md border border-white/10 bg-[#131318]/95 backdrop-blur-md p-2.5 z-50 text-xs space-y-2">
-                          <span className="font-bold text-white block px-1 border-b border-white/10 pb-1">
-                            Automation Controls
-                          </span>
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 bottom-10 w-52 rounded-md border border-white/10 bg-[#131318]/95 backdrop-blur-md p-2.5 z-50 text-xs space-y-2 shadow-2xl"
+                        >
+                          <div className="flex items-center justify-between px-1 border-b border-white/10 pb-1">
+                            <span className="font-bold text-white">Automation</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenu(null);
+                              }}
+                              className="text-zinc-400 hover:text-white hover:bg-white/10 rounded p-1 transition-colors"
+                              title="Close (Esc)"
+                              aria-label="Close Automation Menu"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
 
                           <button
                             onClick={() => onAutoToggle?.("autoPlay")}
@@ -1517,9 +1612,15 @@ export function VideoPlayer({
                     </div>
 
                     {/* Subtitle Selector Button */}
-                    <div className="relative">
+                    <div
+                      ref={activeMenu === "subtitles" ? activeMenuRef : undefined}
+                      className="relative"
+                    >
                       <button
-                        onClick={() => setActiveMenu(activeMenu === "subtitles" ? null : "subtitles")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenu((prev) => (prev === "subtitles" ? null : "subtitles"));
+                        }}
                         className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md transition-colors ${
                           activeMenu === "subtitles" || selectedSubUrl
                             ? "bg-white/15 text-white"
@@ -1533,9 +1634,25 @@ export function VideoPlayer({
 
                       {/* Subtitle Popup Menu */}
                       {activeMenu === "subtitles" && (
-                        <div className="absolute right-0 bottom-10 w-64 max-h-80 overflow-y-auto rounded-md border border-white/10 bg-[#131318]/95 backdrop-blur-md p-3 z-50 text-xs space-y-3 scrollbar-thin">
-                          <div>
-                            <span className="font-bold text-white block mb-1.5">Subtitle Track</span>
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 bottom-10 w-64 max-h-80 overflow-y-auto rounded-md border border-white/10 bg-[#131318]/95 backdrop-blur-md p-3 z-50 text-xs space-y-3 scrollbar-thin shadow-2xl"
+                        >
+                          <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
+                            <span className="font-bold text-white">Subtitle Track</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenu(null);
+                              }}
+                              className="text-zinc-400 hover:text-white hover:bg-white/10 rounded p-1 transition-colors"
+                              title="Close (Esc)"
+                              aria-label="Close Subtitles Menu"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                             <div className="space-y-1">
                               <button
                                 onClick={() => {
@@ -1570,7 +1687,6 @@ export function VideoPlayer({
                                 );
                               })}
                             </div>
-                          </div>
 
                           {/* Subtitle Sync Offset */}
                           <div className="border-t border-white/10 pt-2">
@@ -1615,9 +1731,15 @@ export function VideoPlayer({
 
                     {/* Server Stream Selector */}
                     {streams.length > 1 && (
-                      <div className="relative">
+                      <div
+                        ref={activeMenu === "servers" ? activeMenuRef : undefined}
+                        className="relative"
+                      >
                         <button
-                          onClick={() => setActiveMenu(activeMenu === "servers" ? null : "servers")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenu((prev) => (prev === "servers" ? null : "servers"));
+                          }}
                           className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md transition-colors ${
                             activeMenu === "servers"
                               ? "bg-white/15 text-white"
@@ -1630,10 +1752,25 @@ export function VideoPlayer({
                         </button>
 
                         {activeMenu === "servers" && (
-                          <div className="absolute right-0 bottom-10 w-48 rounded-md border border-white/10 bg-[#131318]/95 backdrop-blur-md p-2 z-50 text-xs space-y-1">
-                            <span className="font-bold text-white block px-2 py-1 border-b border-white/10">
-                              Stream Servers
-                            </span>
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute right-0 bottom-10 w-48 rounded-md border border-white/10 bg-[#131318]/95 backdrop-blur-md p-2 z-50 text-xs space-y-1 shadow-2xl"
+                          >
+                            <div className="flex items-center justify-between px-2 py-1 border-b border-white/10">
+                              <span className="font-bold text-white">Stream Servers</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenu(null);
+                                }}
+                                className="text-zinc-400 hover:text-white hover:bg-white/10 rounded p-1 transition-colors"
+                                title="Close (Esc)"
+                                aria-label="Close Server Menu"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                             {streams.map((s, idx) => (
                               <button
                                 key={idx}
@@ -1660,9 +1797,15 @@ export function VideoPlayer({
                     )}
 
                     {/* General Settings (Speed & Quality) */}
-                    <div className="relative">
+                    <div
+                      ref={activeMenu === "settings" ? activeMenuRef : undefined}
+                      className="relative"
+                    >
                       <button
-                        onClick={() => setActiveMenu(activeMenu === "settings" ? null : "settings")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenu((prev) => (prev === "settings" ? null : "settings"));
+                        }}
                         className="text-zinc-300 hover:text-white transition-colors p-1"
                         title="Player Settings"
                       >
@@ -1671,7 +1814,25 @@ export function VideoPlayer({
 
                       {/* Settings Popup Menu */}
                       {activeMenu === "settings" && (
-                        <div className="absolute right-0 bottom-10 w-48 rounded-md border border-white/10 bg-[#131318]/95 backdrop-blur-md p-2 z-50 text-xs">
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 bottom-10 w-48 rounded-md border border-white/10 bg-[#131318]/95 backdrop-blur-md p-2 z-50 text-xs shadow-2xl"
+                        >
+                          <div className="flex items-center justify-between px-2 pb-1.5 mb-1.5 border-b border-white/10">
+                            <span className="font-bold text-white">Settings</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenu(null);
+                              }}
+                              className="text-zinc-400 hover:text-white hover:bg-white/10 rounded p-1 transition-colors"
+                              title="Close (Esc)"
+                              aria-label="Close Settings Menu"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                           {/* Volume Booster Section */}
                           <div className="border-b border-white/10 pb-1.5 mb-1.5">
                             <div className="flex items-center justify-between px-2 mb-1">

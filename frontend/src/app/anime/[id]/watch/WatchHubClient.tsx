@@ -292,6 +292,12 @@ export function WatchHubClient({
         if (aud === "dub") {
           setDubAvailable(true);
         }
+        const hasHls = res?.streams?.some((s: any) => s.type === "hls" || s.isM3U8);
+        if (hasHls) {
+          setPlayerMode("stream");
+        } else if (res?.streams && res.streams.length > 0 && res.streams.every((s: any) => s.type === "embed")) {
+          setPlayerMode("embed");
+        }
       } catch (err: any) {
         const errMsg = err?.message || "";
         const isDubError = aud === "dub" || errMsg.toLowerCase().includes("dub");

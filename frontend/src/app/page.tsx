@@ -48,9 +48,9 @@ export default async function HomePage() {
         <ContinueTrackingRow />
 
         {/* 4 & 5. Main Grid + Right Sidebar */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 sm:gap-7 lg:gap-8">
-          {/* Main Content Area (3, 4, or 5 cols) */}
-          <div className="lg:col-span-3 xl:col-span-4 2xl:col-span-5 space-y-7 sm:space-y-8 md:space-y-10">
+        <div className="flex flex-col lg:flex-row gap-6 sm:gap-7 lg:gap-8 items-start">
+          {/* Main Content Area */}
+          <div className="flex-1 min-w-0 space-y-7 sm:space-y-8 md:space-y-10">
             <HomeMainGrid
               trendingList={trendingData.results}
               popularList={popularData.results}
@@ -64,8 +64,8 @@ export default async function HomePage() {
             />
           </div>
 
-          {/* Right Sidebar (1 col) */}
-          <div className="lg:col-span-1 xl:col-span-1 2xl:col-span-1 space-y-6 sm:space-y-7">
+          {/* Right Sidebar (Wide, readable & well-proportioned) */}
+          <div className="w-full lg:w-[360px] xl:w-[400px] 2xl:w-[440px] shrink-0 space-y-6 sm:space-y-7">
             <TopSidebar
               topAiring={topAiringData.results}
               upcoming={upcomingData.results}

@@ -120,7 +120,7 @@ export function DetailHeader({ anime }: DetailHeaderProps) {
 
               {/* Score badge top-right */}
               {anime.averageScore && (
-                <div className="absolute top-2.5 right-2.5 rounded-md bg-black/75 backdrop-blur-md p-1 border border-white/15">
+                <div className="absolute top-2.5 right-2.5 rounded-full bg-black/75 backdrop-blur-md p-1 border border-white/15 flex justify-center items-center">
                   <RatingRing score={anime.averageScore} size={36} />
                 </div>
               )}
@@ -195,15 +195,20 @@ export function DetailHeader({ anime }: DetailHeaderProps) {
                     {anime.duration}m/ep
                   </span>
                 )}
-                {anime.studios?.filter((s) => s.isMain).map((studio) => (
-                  <Link
-                    key={studio.id}
-                    href={`/studio/${studio.id}`}
-                    className="rounded border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-2 py-0.5 font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-colors"
-                  >
-                    {studio.name}
-                  </Link>
-                ))}
+                {(Array.isArray(anime.studios)
+                  ? anime.studios
+                  : ((anime.studios as any)?.nodes || [])
+                )
+                  .filter((s: any) => s.isMain !== false)
+                  .map((studio: any) => (
+                    <Link
+                      key={studio.id}
+                      href={`/studio/${studio.id}`}
+                      className="rounded border border-[var(--accent)]/30 bg-[var(--accent)]/10 px-2 py-0.5 font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/20 transition-colors"
+                    >
+                      {studio.name}
+                    </Link>
+                  ))}
               </div>
 
               {/* Action Buttons Bar */}

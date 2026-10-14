@@ -94,15 +94,15 @@ export function SpotlightHero({ spotlightList }: SpotlightHeroProps) {
           {/* Spotlight Badge & Meta Chips */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="flex items-center gap-1.5 rounded-full bg-[var(--accent)] text-white px-3 py-1 text-xs font-bold uppercase tracking-wider shadow-sm">
-              <Sparkles className="h-3 w-3" />
-              Spotlight #{currentIndex + 1}
+              {/* <Sparkles className="h-3 w-3" /> */}
+              #{currentIndex + 1}
             </span>
 
-            {currentAnime.format && (
+            {/* {currentAnime.format && (
               <span className="rounded-md border border-white/15 bg-white/10 px-2.5 py-1 text-xs font-semibold text-zinc-200 uppercase backdrop-blur-sm">
                 {currentAnime.format}
               </span>
-            )}
+            )} */}
 
             {currentAnime.averageScore && (
               <span className="flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-300 backdrop-blur-sm">
@@ -136,7 +136,7 @@ export function SpotlightHero({ spotlightList }: SpotlightHeroProps) {
           </p>
 
           {/* Genre Chips */}
-          <div className="flex flex-wrap gap-2 pt-0.5">
+          {/* <div className="flex flex-wrap gap-2 pt-0.5">
             {currentAnime.genres?.slice(0, 4).map((g) => (
               <span
                 key={g}
@@ -145,7 +145,7 @@ export function SpotlightHero({ spotlightList }: SpotlightHeroProps) {
                 {g}
               </span>
             ))}
-          </div>
+          </div> */}
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -165,7 +165,7 @@ export function SpotlightHero({ spotlightList }: SpotlightHeroProps) {
               <span>DETAILS</span>
             </Link>
 
-            <button
+            {/* <button
               onClick={handleWatchlist}
               className="flex items-center gap-1.5 rounded-md border border-white/20 bg-black/40 hover:bg-white/10 text-zinc-200 text-xs sm:text-sm px-4 py-2.5 backdrop-blur-md transition-all active:scale-95"
             >
@@ -180,7 +180,7 @@ export function SpotlightHero({ spotlightList }: SpotlightHeroProps) {
                   <span>+ Watchlist</span>
                 </>
               )}
-            </button>
+            </button> */}
           </div>
         </div>
 
