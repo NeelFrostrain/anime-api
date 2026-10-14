@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   ExternalLink,
   Lightbulb,
   Check,
@@ -61,6 +62,28 @@ export function WatchHubClient({
   const [audio, setAudio] = useState<"sub" | "dub">("sub");
   const [provider, setProvider] = useState<string>("auto");
   const [playerMode, setPlayerMode] = useState<"stream" | "embed">("stream");
+
+  // Custom extraction server dropdown state
+  const [showServerDropdown, setShowServerDropdown] = useState(false);
+  const serverDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showServerDropdown) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (serverDropdownRef.current && !serverDropdownRef.current.contains(e.target as Node)) {
+        setShowServerDropdown(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowServerDropdown(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showServerDropdown]);
 
   // Automation options
   const [autoPlay, setAutoPlay] = useState(true);
@@ -425,7 +448,7 @@ export function WatchHubClient({
             />
 
             {/* Unified Playback, Episode Navigation & Source Hub */}
-            <div className="rounded-xl border border-white/10 bg-[#131318] p-2 sm:p-2.5 space-y-2 shadow-sm">
+            <div className="rounded-xl border border-white/10 bg-[#131318] p-2 sm:p-2.5 space-y-2 shadow-sm relative z-20">
               {/* Row 1: Unified Quick Controls Bar */}
               <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
                 {/* 1. Episode Navigation (Prev / Counter / Next) */}
@@ -529,19 +552,93 @@ export function WatchHubClient({
                     </button>
                   </div>
 
-                  {/* Extraction Server Select */}
-                  <div className="flex items-center gap-1">
-                    <select
-                      value={provider}
-                      onChange={(e) => setProvider(e.target.value)}
-                      className="rounded border border-white/10 bg-black/60 px-2 py-1 text-xs font-semibold text-zinc-200 outline-none focus:border-[var(--accent)] transition-colors max-w-[125px] sm:max-w-[150px] truncate"
-                    >
-                      {EXTRACTION_PROVIDERS.map((p) => (
-                        <option key={p.id} value={p.id} className="bg-[#131318] text-white">
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
+                  {/* Custom Extraction Server Dropdown */}
+                  <div className="flex items-center gap-1.5">
+                    <div ref={serverDropdownRef} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowServerDropdown((prev) => !prev)}
+                        className={`flex items-center gap-1 rounded border px-2 py-1 text-xs font-semibold transition-all select-none ${
+                          showServerDropdown
+                            ? "bg-white/15 border-white/30 text-white shadow-sm ring-1 ring-[var(--accent)]/40"
+                            : "border-white/10 bg-black/60 text-zinc-200 hover:text-white hover:bg-white/10"
+                        }`}
+                        title="Change Extraction Server"
+                        aria-expanded={showServerDropdown}
+                      >
+                        <Server className="h-3 w-3 text-amber-400 shrink-0" />
+                        <span className="truncate max-w-[105px] sm:max-w-[135px]">
+                          {EXTRACTION_PROVIDERS.find((p) => p.id === provider)?.name || PROVIDER_NAMES[provider] || provider}
+                        </span>
+                        <ChevronDown
+                          className={`h-3 w-3 text-zinc-400 shrink-0 transition-transform duration-200 ${
+                            showServerDropdown ? "rotate-180 text-white" : ""
+                          }`}
+                        />
+                      </button>
+
+                      {showServerDropdown && (
+                        <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1.5 w-52 max-h-72 overflow-y-auto scrollbar-thin rounded-lg bg-[#141419]/95 border border-white/20 p-1.5 z-50 space-y-0.5 shadow-2xl backdrop-blur-md">
+                          <div className="flex items-center justify-between px-2 py-1 border-b border-white/10 sticky top-0 bg-[#141419]/95 backdrop-blur-md z-10">
+                            <span className="text-[10px] uppercase font-bold text-zinc-400">
+                              Extraction Server
+                            </span>
+                            <span className="text-[9px] font-mono text-zinc-500">
+                              {EXTRACTION_PROVIDERS.length} Available
+                            </span>
+                          </div>
+
+                          <div className="pt-1 space-y-0.5">
+                            {EXTRACTION_PROVIDERS.map((p) => {
+                              const isSelected = provider === p.id;
+                              const isWinner = streamResult?.provider === p.id;
+                              return (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setProvider(p.id);
+                                    setShowServerDropdown(false);
+                                  }}
+                                  className={`flex w-full items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                                    isSelected
+                                      ? "bg-[var(--accent)] text-white font-bold shadow-sm"
+                                      : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    <span className="truncate">{p.name}</span>
+                                    {p.id === "auto" && (
+                                      <span
+                                        className={`text-[9px] px-1 py-0.5 rounded font-mono ${
+                                          isSelected
+                                            ? "bg-white/20 text-white"
+                                            : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                        }`}
+                                      >
+                                        Fastest
+                                      </span>
+                                    )}
+                                    {isWinner && p.id !== "auto" && (
+                                      <span
+                                        className={`text-[9px] px-1 py-0.5 rounded font-mono ${
+                                          isSelected
+                                            ? "bg-white/20 text-white"
+                                            : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                        }`}
+                                      >
+                                        Active
+                                      </span>
+                                    )}
+                                  </div>
+                                  {isSelected && <Check className="h-3.5 w-3.5 shrink-0 ml-1.5 text-white" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     {streamResult?.provider && (
                       <span className="hidden xl:inline font-mono text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded px-1.5 py-0.5 font-semibold">
