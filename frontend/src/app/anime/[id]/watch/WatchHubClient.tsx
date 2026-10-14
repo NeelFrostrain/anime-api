@@ -65,12 +65,24 @@ export function WatchHubClient({
   const [provider, setProvider] = useState<string>("auto");
   const [playerMode, setPlayerMode] = useState<"stream" | "embed">("stream");
 
-  // Custom extraction server dropdown state
+  // Custom extraction server dropdown state with smart positioning
   const [showServerDropdown, setShowServerDropdown] = useState(false);
+  const [dropdownDirection, setDropdownDirection] = useState<"up" | "down">("down");
   const serverDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!showServerDropdown) return;
+    if (serverDropdownRef.current) {
+      const rect = serverDropdownRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      // If less than 280px below and more room above, open upwards to avoid overlapping bottom
+      if (spaceBelow < 280 && spaceAbove > spaceBelow) {
+        setDropdownDirection("up");
+      } else {
+        setDropdownDirection("down");
+      }
+    }
     const handleClickOutside = (e: MouseEvent) => {
       if (serverDropdownRef.current && !serverDropdownRef.current.contains(e.target as Node)) {
         setShowServerDropdown(false);
@@ -400,7 +412,7 @@ export function WatchHubClient({
 
   return (
     <div className={`transition-all duration-500 ${lightsOff ? "bg-black" : "bg-[#0a0a0c]"}`}>
-      <div className="w-full px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-5 sm:py-6 md:py-8 space-y-5 sm:space-y-6">
+      <div className="w-full px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-5 sm:py-6 md:py-8 pb-16 sm:pb-20 md:pb-24 space-y-5 sm:space-y-6">
         {/* Top Header / Breadcrumb */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3.5 sm:pb-4 w-full overflow-hidden">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 w-full sm:w-auto overflow-hidden">
@@ -531,7 +543,7 @@ export function WatchHubClient({
             />
 
             {/* Unified Playback, Episode Navigation & Source Hub */}
-            <div className="rounded-xl border border-white/10 bg-[#131318] p-2 sm:p-2.5 space-y-2 shadow-sm relative z-20">
+            <div className="rounded-md border border-white/10 bg-[#131318] p-2 sm:p-2.5 space-y-2 shadow-sm relative z-30">
               {/* Row 1: Unified Quick Controls Bar */}
               <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
                 {/* 1. Episode Navigation (Prev / Counter / Next) */}
@@ -551,7 +563,7 @@ export function WatchHubClient({
                     <span>Prev</span>
                   </button>
 
-                  <div className="px-2 py-0.5 rounded bg-white/[0.04] border border-white/5 text-center">
+                  <div className="px-2 rounded bg-white/[0.04] border border-white/5 text-center">
                     <span className="text-xs font-mono font-bold text-zinc-200 whitespace-nowrap">
                       EP {currentEpNum} <span className="text-zinc-600 font-normal">/</span> {playableEpisodes.length || anime.episodes || "?"}
                     </span>
@@ -661,7 +673,11 @@ export function WatchHubClient({
                       </button>
 
                       {showServerDropdown && (
-                        <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1.5 w-52 max-h-72 overflow-y-auto scrollbar-thin rounded-lg bg-[#141419]/95 border border-white/20 p-1.5 z-50 space-y-0.5 shadow-2xl backdrop-blur-md">
+                        <div
+                          className={`absolute left-0 sm:left-auto sm:right-0 ${
+                            dropdownDirection === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5"
+                          } w-52 max-h-64 overflow-y-auto scrollbar-thin rounded-lg bg-[#141419]/95 border border-white/20 p-1.5 z-[100] space-y-0.5 shadow-2xl backdrop-blur-md`}
+                        >
                           <div className="flex items-center justify-between px-2 py-1 border-b border-white/10 sticky top-0 bg-[#141419]/95 backdrop-blur-md z-10">
                             <span className="text-[10px] uppercase font-bold text-zinc-400">
                               Extraction Server
@@ -781,7 +797,7 @@ export function WatchHubClient({
               )}
 
               {/* Official Licensed Streaming Distributors */}
-              <div className="pt-1.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-1.5">
+              {/* <div className="pt-1.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-1.5">
                 <div className="flex items-center gap-1 text-[11px] font-bold text-zinc-300 uppercase tracking-wider">
                   <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                   <span>Official Distributors:</span>
@@ -807,15 +823,15 @@ export function WatchHubClient({
                     </span>
                   )}
                 </div>
-              </div>
+              </div> */}
             </div>
 
             {/* Anime Detail Overview Card (Placed right after controls section) */}
-            <div className="rounded-xl border border-white/10 bg-[#131318] p-3.5 sm:p-5 shadow-sm">
+            <div className="rounded-md border border-white/10 bg-[#131318] p-3.5 sm:p-5 shadow-sm">
               <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-5">
                 {/* Left: Poster Cover Image */}
                 {posterUrl && (
-                  <div className="relative w-28 sm:w-36 md:w-44 aspect-[2/3] shrink-0 overflow-hidden rounded-lg border border-white/10 shadow-lg bg-black/40">
+                  <div className="relative w-28 sm:w-36 md:w-44 aspect-[2/3] shrink-0 overflow-hidden rounded-md border border-white/10 shadow-lg bg-black/40">
                     <Image
                       src={posterUrl}
                       alt={title}

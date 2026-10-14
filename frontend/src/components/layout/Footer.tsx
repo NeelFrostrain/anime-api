@@ -19,7 +19,7 @@ export function Footer() {
   ];
 
   return (
-    <footer className="w-full border-t border-white/10 bg-[#0a0a0c] pt-6 pb-20 md:pb-8 text-zinc-400 text-xs">
+    <footer className="relative z-0 w-full border-t border-white/10 bg-[#0a0a0c] pt-6 pb-20 md:pb-8 text-zinc-400 text-xs">
       <div className="w-full px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
           {/* Col 1: Brand & Disclaimer */}

@@ -45,7 +45,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#0a0a0c] text-zinc-100 flex flex-col font-sans selection:bg-[var(--accent)] selection:text-white antialiased">
         <Providers>
           <Navbar />
-          <main className="flex-1 w-full overflow-x-hidden">{children}</main>
+          <main className="flex-1 w-full relative z-10 overflow-x-clip">{children}</main>
           <Footer />
           <MobileNav />
         </Providers>
