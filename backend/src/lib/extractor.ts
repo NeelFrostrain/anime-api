@@ -40,9 +40,66 @@ function diceCoefficient(a: string, b: string): number {
   return (2.0 * intersection) / (s1.length - 1 + s2.length - 1);
 }
 
-// Fetch candidate titles for an anime using AniZip or AniList
+// Helper: build comprehensive, accurate search queries for streaming providers
+export function buildSearchQueries(titles: string[]): string[] {
+  const queries: string[] = [];
+  const seen = new Set<string>();
+
+  function addQuery(q: string) {
+    if (!q) return;
+    const clean = q.trim().replace(/\s+/g, " ");
+    // Ignore pure season/part indicators or strings without letters
+    if (clean.length < 3) return;
+    if (!/[a-zA-Z]/.test(clean)) return;
+    if (/^(season|part|cour|episode)\s*\d+$/i.test(clean)) return;
+    if (/^\d+(st|nd|rd|th)?(\s+season)?$/i.test(clean)) return;
+    const lower = clean.toLowerCase();
+    if (!seen.has(lower)) {
+      seen.add(lower);
+      queries.push(clean);
+    }
+  }
+
+  for (const t of titles) {
+    if (!t) continue;
+    // Skip purely CJK strings for Latin-based search
+    if (/^[\u3000-\u9fff\u4e00-\u9faf\s]+$/.test(t)) continue;
+
+    // 1. Full title stripped of year (2024), format [TV], etc.
+    const noYear = t
+      .replace(/\s*[\(\[]\s*\d{4}\s*[\)\]]/g, "")
+      .replace(/\s*[\(\[]\s*TV\s*[\)\]]/gi, "")
+      .trim();
+    addQuery(noYear);
+
+    // 2. Split on dashes, en-dashes, or colon with space: ' - ', ' – ', ': '
+    const parts = noYear.split(/\s*[-–—]\s*|:\s+/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      // First part (e.g. "Re:ZERO", "Frieren", "Bleach")
+      addQuery(parts[0]);
+      // First two parts combined if short
+      if (parts[0].length < 15 && parts[1]) {
+        addQuery(`${parts[0]}: ${parts[1]}`);
+      }
+      // Subtitle / second part (e.g. "Starting Life in Another World")
+      if (parts[1].length >= 5) {
+        addQuery(parts[1]);
+      }
+    }
+
+    // 3. Word prefixes (e.g. first 3 words)
+    const words = noYear.split(/\s+/).filter(Boolean);
+    if (words.length >= 3 && words.length <= 6) {
+      addQuery(words.slice(0, 3).join(" "));
+    }
+  }
+
+  return queries;
+}
+
+// Fetch candidate titles for an anime using AniList GraphQL and AniZip mappings
 export async function fetchShowTitles(anilistId: number, kv?: KVNamespace): Promise<string[]> {
-  const cacheKey = `titles:${anilistId}`;
+  const cacheKey = `titles:v2:${anilistId}`;
   if (kv) {
     try {
       const cached = await kv.get(cacheKey, "json");
@@ -50,43 +107,53 @@ export async function fetchShowTitles(anilistId: number, kv?: KVNamespace): Prom
     } catch {}
   }
 
-  let titles: string[] = [];
+  const titlesSet = new Set<string>();
 
-  // 1. Try AniZip first (fast, comprehensive multilingual titles)
-  try {
-    const azRes = await fetch(`https://api.ani.zip/mappings?anilist_id=${anilistId}`, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      signal: AbortSignal.timeout(2500),
-    });
-    if (azRes.ok) {
-      const azData = (await azRes.json()) as any;
-      if (azData && azData.titles) {
-        titles = Object.values(azData.titles).filter((t): t is string => typeof t === "string" && Boolean(t));
-      }
-    }
-  } catch {}
-
-  // 2. Fallback to AniList GraphQL
-  if (titles.length === 0) {
-    try {
-      const alRes = await fetch("https://graphql.anilist.co", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({
-          query: `query($id: Int) { Media(id: $id) { title { english romaji native } synonyms } }`,
-          variables: { id: anilistId },
-        }),
-        signal: AbortSignal.timeout(3000),
-      });
-      if (alRes.ok) {
-        const alData = (await alRes.json()) as any;
-        const m = alData?.data?.Media;
-        if (m) {
-          titles = [m.title?.english, m.title?.romaji, ...(m.synonyms || [])].filter(Boolean);
+  // Parallel fetch: AniList GraphQL (canonical) and AniZip (multilingual mappings)
+  await Promise.allSettled([
+    (async () => {
+      try {
+        const alRes = await fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({
+            query: `query($id: Int) { Media(id: $id) { title { english romaji native } synonyms } }`,
+            variables: { id: anilistId },
+          }),
+          signal: AbortSignal.timeout(3000),
+        });
+        if (alRes.ok) {
+          const alData = (await alRes.json()) as any;
+          const m = alData?.data?.Media;
+          if (m) {
+            if (m.title?.english) titlesSet.add(m.title.english);
+            if (m.title?.romaji) titlesSet.add(m.title.romaji);
+            if (Array.isArray(m.synonyms)) {
+              for (const s of m.synonyms) if (s) titlesSet.add(s);
+            }
+          }
         }
-      }
-    } catch {}
-  }
+      } catch {}
+    })(),
+    (async () => {
+      try {
+        const azRes = await fetch(`https://api.ani.zip/mappings?anilist_id=${anilistId}`, {
+          headers: { "User-Agent": "Mozilla/5.0" },
+          signal: AbortSignal.timeout(3000),
+        });
+        if (azRes.ok) {
+          const azData = (await azRes.json()) as any;
+          if (azData && azData.titles) {
+            for (const t of Object.values(azData.titles)) {
+              if (typeof t === "string" && t) titlesSet.add(t);
+            }
+          }
+        }
+      } catch {}
+    })(),
+  ]);
+
+  const titles = Array.from(titlesSet);
 
   if (titles.length > 0 && kv) {
     try {
@@ -107,29 +174,14 @@ export async function extractKaaStreams(
   const titles = await fetchShowTitles(anilistId, kv);
   if (!titles || titles.length === 0) return null;
 
-  // Build queries: full titles + 2/3 word prefixes
-  const cleanQueries: string[] = [];
-  for (const t of titles) {
-    if (/[\u3000-\u9fff\u4e00-\u9faf]/.test(t)) continue;
-    const clean = t.replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
-    if (clean.length < 3) continue;
-
-    const words = clean.split(" ").filter(Boolean);
-    if (words.length <= 4) {
-      if (!cleanQueries.includes(clean)) cleanQueries.push(clean);
-    } else {
-      const q2 = words.slice(0, 2).join(" ");
-      const q3 = words.slice(0, 3).join(" ");
-      if (q2.length >= 3 && !cleanQueries.includes(q2)) cleanQueries.push(q2);
-      if (q3.length >= 3 && !cleanQueries.includes(q3)) cleanQueries.push(q3);
-    }
-  }
-
+  const cleanQueries = buildSearchQueries(titles);
   if (cleanQueries.length === 0) return null;
 
-  // Search Kaa with queries
+  // Search Kaa with queries (first 5 queries)
   const candidates: any[] = [];
-  for (const q of cleanQueries.slice(0, 4)) {
+  const seenSlugs = new Set<string>();
+
+  for (const q of cleanQueries.slice(0, 5)) {
     try {
       const sRes = await fetch("https://kaa.lt/api/fsearch", {
         method: "POST",
@@ -140,7 +192,12 @@ export async function extractKaaStreams(
       if (sRes.ok) {
         const sData = (await sRes.json()) as any;
         if (Array.isArray(sData.result)) {
-          candidates.push(...sData.result);
+          for (const item of sData.result) {
+            if (item?.slug && !seenSlugs.has(item.slug)) {
+              seenSlugs.add(item.slug);
+              candidates.push(item);
+            }
+          }
         }
       }
     } catch {}
@@ -150,16 +207,12 @@ export async function extractKaaStreams(
 
   // Deduplicate and score candidates
   const scored: any[] = [];
-  const seenSlugs = new Set<string>();
   for (const c of candidates) {
-    if (!c.slug || seenSlugs.has(c.slug)) continue;
-    seenSlugs.add(c.slug);
-
     let maxScore = 0;
     const cEn = c.title_en || "";
     const cJp = c.title || "";
     for (const t of titles) {
-      if (/[\u3000-\u9fff\u4e00-\u9faf]/.test(t)) continue;
+      if (/^[\u3000-\u9fff\u4e00-\u9faf\s]+$/.test(t)) continue;
       maxScore = Math.max(maxScore, diceCoefficient(t, cEn), diceCoefficient(t, cJp));
     }
     scored.push({ ...c, matchScore: maxScore });
@@ -354,12 +407,12 @@ export async function extractStreamSources(
   const anilistId = Number(query);
   const targetCategory = audio === "dub" ? "dub" : "sub";
   const targetProvider = provider || "auto";
-  const cacheKey = `stream:${anilistId}:${episode}:${targetCategory}:${targetProvider}`;
+  const cacheKey = `stream:v2:${anilistId}:${episode}:${targetCategory}:${targetProvider}`;
 
   if (kv) {
     try {
       const cached = await kv.get(cacheKey, "json");
-      if (cached) return cached;
+      if (cached && (cached as any).provider === "kaa") return cached;
     } catch {}
   }
 
@@ -426,7 +479,8 @@ export async function extractStreamSources(
 
   if (kv) {
     try {
-      await kv.put(cacheKey, JSON.stringify(result), { expirationTtl: 1800 });
+      const ttl = directStreams && directStreams.length > 0 ? 1800 : 60;
+      await kv.put(cacheKey, JSON.stringify(result), { expirationTtl: ttl });
     } catch {}
   }
 

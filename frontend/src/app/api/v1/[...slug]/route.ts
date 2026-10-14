@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { anilist } from "@/lib/anilist";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const BACKEND_URL =
   process.env.BACKEND_URL ||
   process.env.INTERNAL_API_URL?.replace(/\/api\/v1\/?$/, "") ||
@@ -26,6 +29,7 @@ async function proxyToBackend(req: NextRequest, slug: string[]) {
     method: req.method,
     headers: forwardHeaders,
     redirect: "manual",
+    cache: "no-store",
   };
 
   if (req.method !== "GET" && req.method !== "HEAD") {
