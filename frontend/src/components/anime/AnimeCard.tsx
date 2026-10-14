@@ -121,10 +121,12 @@ export function AnimeCard({ anime, priority = false }: AnimeCardProps) {
 
           <div className="flex items-center gap-2 text-[11px] text-zinc-400 font-medium">
             {anime.format && <span className="uppercase">{anime.format}</span>}
+            {anime.format && " • "}
             {(anime.startDate?.year || anime.seasonYear) && (
-              <span>• {anime.startDate?.year || anime.seasonYear}</span>
+              <span> {anime.startDate?.year || anime.seasonYear}</span>
             )}
-            {anime.episodes && <span>• {anime.episodes} eps</span>}
+            {anime.format && " • "}
+            {anime.episodes && <span> {anime.episodes} eps</span>}
           </div>
         </div>
       </Link>

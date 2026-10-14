@@ -452,7 +452,7 @@ export function WatchHubClient({
         </div>
 
         {/* Video Player & Episode Sidebar Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 2xl:grid-cols-6 gap-6 sm:gap-7">
+        <div className="grid grid-cols-1 lg:grid-cols-4 2xl:grid-cols-5 gap-5 sm:gap-6">
           {/* Main Video Area (3 cols / 4 cols on 2xl) */}
           <div className="lg:col-span-3 2xl:col-span-4 space-y-4 sm:space-y-5">
             {/* DUB Not Available Notification Toast */}
