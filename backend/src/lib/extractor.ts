@@ -277,44 +277,51 @@ export async function extractKaaStreams(
     if (!s.src) continue;
     const idMatch = s.src.match(/[?&]id=([^&]+)/);
     if (!idMatch) continue;
-    const rawId = idMatch[1];
+    const rawId = decodeURIComponent(idMatch[1]);
 
     let manifestUrl: string | null = null;
     let subtitles: any[] = [];
 
-    if (!rawId.includes(":")) {
+    const isVidStreaming =
+      s.name === "VidStreaming" ||
+      s.src.includes("source=vidstream") ||
+      (!rawId.includes(":") && rawId.length === 24);
+
+    if (isVidStreaming) {
       manifestUrl = `https://hls.krussdomi.com/manifest/${rawId}/master.m3u8`;
     } else {
-      // CatStream or Astro player
+      // CatStream or Astro player (HTML contains HTML-escaped JSON)
       try {
         const pHtml = await fetch(s.src, {
           headers: { "User-Agent": "Mozilla/5.0" },
-          signal: AbortSignal.timeout(3000),
+          signal: AbortSignal.timeout(3500),
         }).then((r) => r.text());
 
-        const mMatch = pHtml.match(/"manifest"\s*:\s*\[\s*\d+\s*,\s*"([^"]+)"/);
+        const unescapedHtml = pHtml
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&amp;/g, "&");
+
+        const mMatch = unescapedHtml.match(/"manifest"\s*:\s*\[\s*\d+\s*,\s*"([^"]+)"/);
         if (mMatch) {
           manifestUrl = mMatch[1].startsWith("//") ? `https:${mMatch[1]}` : mMatch[1];
         }
 
         // Extract subtitles if embedded
-        const subMatch = pHtml.match(/"subtitles"\s*:\s*\[\s*\d+\s*,\s*(\[[^\]]+\])/);
-        if (subMatch) {
-          try {
-            const rawSubs = JSON.parse(subMatch[1]);
-            if (Array.isArray(rawSubs)) {
-              subtitles = rawSubs
-                .map((item: any) => {
-                  const subObj = item?.[1] || item;
-                  return {
-                    url: subObj?.src?.[1] || subObj?.src,
-                    lang: subObj?.language?.[1] || subObj?.language || "en",
-                    label: subObj?.name?.[1] || subObj?.name || "English",
-                  };
-                })
-                .filter((sub) => Boolean(sub.url));
-            }
-          } catch {}
+        const subMatches = [
+          ...unescapedHtml.matchAll(
+            /"language":\[\d+,"([^"]+)"\].*?"name":\[\d+,"([^"]+)"\].*?"src":\[\d+,"([^"]+)"\]/g
+          ),
+        ];
+        if (subMatches.length > 0) {
+          subtitles = subMatches.map((m) => {
+            const rawUrl = m[3].replace(/^https:\/\/\//, "https://");
+            return {
+              url: rawUrl,
+              lang: m[1],
+              label: m[2],
+            };
+          });
         }
       } catch {}
     }
@@ -407,7 +414,7 @@ export async function extractStreamSources(
   const anilistId = Number(query);
   const targetCategory = audio === "dub" ? "dub" : "sub";
   const targetProvider = provider || "auto";
-  const cacheKey = `stream:v2:${anilistId}:${episode}:${targetCategory}:${targetProvider}`;
+  const cacheKey = `stream:v4:${anilistId}:${episode}:${targetCategory}:${targetProvider}`;
 
   if (kv) {
     try {
