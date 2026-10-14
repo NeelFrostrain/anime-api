@@ -62,7 +62,7 @@ export function AnimeCard({ anime, priority = false }: AnimeCardProps) {
       <Link href={`/anime/${anime.id}`} className="block focus:outline-none">
         {/* Poster Container (2:3 Aspect Ratio) */}
         <div
-          className="relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-zinc-900 border border-white/10 transition-all duration-200 group-hover:-translate-y-1"
+          className="relative aspect-[2/3] w-full overflow-hidden rounded-md bg-zinc-900 border border-white/10 transition-all duration-200 group-hover:-translate-y-1"
         >
           {poster ? (
             <Image
@@ -100,7 +100,7 @@ export function AnimeCard({ anime, priority = false }: AnimeCardProps) {
           <button
             onClick={handleQuickAdd}
             title={isInWatchlist ? "In Watchlist" : "Add to Watchlist"}
-            className="absolute bottom-2 right-2 z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-black/75 backdrop-blur-md text-white border border-white/20 opacity-0 group-hover:opacity-100 transition-all duration-150 hover:scale-105 active:scale-95 hover:bg-[var(--accent)]"
+            className="absolute bottom-2 right-2 z-10 flex h-8 w-8 items-center justify-center rounded-md bg-black/75 backdrop-blur-md text-white border border-white/20 opacity-0 group-hover:opacity-100 transition-all duration-150 hover:scale-105 active:scale-95 hover:bg-[var(--accent)]"
           >
             {isInWatchlist ? (
               <Check className="h-4 w-4 text-emerald-400" />

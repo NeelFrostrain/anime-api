@@ -41,7 +41,7 @@ export function ScheduleWidget({ weekDays }: ScheduleWidgetProps) {
           <button
             key={day.date}
             onClick={() => setSelectedDayIdx(idx)}
-            className={`flex flex-col items-center rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all ${
+            className={`flex flex-col items-center rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all ${
               selectedDayIdx === idx
                 ? "bg-[var(--accent)] text-white shadow-sm"
                 : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10"
@@ -66,7 +66,7 @@ export function ScheduleWidget({ weekDays }: ScheduleWidgetProps) {
               <Link
                 key={ep.id}
                 href={`/anime/${ep.media.id}`}
-                className="group flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] p-2 sm:p-2.5 hover:border-white/15 hover:bg-white/5 transition-all gap-3"
+                className="group flex items-center justify-between rounded-md border border-white/5 bg-white/[0.02] p-2 sm:p-2.5 hover:border-white/15 hover:bg-white/5 transition-all gap-3"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="relative h-14 w-10 shrink-0 overflow-hidden rounded-md bg-zinc-800 border border-white/10">

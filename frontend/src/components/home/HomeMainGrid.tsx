@@ -48,7 +48,7 @@ export function HomeMainGrid({
         <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveTab("trending")}
-            className={`flex items-center gap-1.5 rounded-lg px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold transition-all ${
+            className={`flex items-center gap-1.5 rounded-md px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold transition-all ${
               activeTab === "trending"
                 ? "bg-[var(--accent)] text-white shadow-sm"
                 : "text-zinc-400 hover:text-white hover:bg-white/5"
@@ -59,7 +59,7 @@ export function HomeMainGrid({
           </button>
           <button
             onClick={() => setActiveTab("popular")}
-            className={`flex items-center gap-1.5 rounded-lg px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold transition-all ${
+            className={`flex items-center gap-1.5 rounded-md px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold transition-all ${
               activeTab === "popular"
                 ? "bg-[var(--accent)] text-white shadow-sm"
                 : "text-zinc-400 hover:text-white hover:bg-white/5"
@@ -70,7 +70,7 @@ export function HomeMainGrid({
           </button>
           <button
             onClick={() => setActiveTab("topRated")}
-            className={`flex items-center gap-1.5 rounded-lg px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold transition-all ${
+            className={`flex items-center gap-1.5 rounded-md px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold transition-all ${
               activeTab === "topRated"
                 ? "bg-[var(--accent)] text-white shadow-sm"
                 : "text-zinc-400 hover:text-white hover:bg-white/5"

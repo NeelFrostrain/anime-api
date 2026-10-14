@@ -61,7 +61,7 @@ export function JustFinishedAndMovies({ justFinished, topMovies }: JustFinishedA
                 href={`/anime/${anime.id}`}
                 onMouseEnter={() => setHoveredFinishedArt(banner)}
                 onMouseLeave={() => setHoveredFinishedArt(null)}
-                className="group flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.02] p-2 sm:p-2.5 hover:border-white/15 hover:bg-white/10 transition-all"
+                className="group flex items-center gap-3 rounded-md border border-white/5 bg-white/[0.02] p-2 sm:p-2.5 hover:border-white/15 hover:bg-white/10 transition-all"
               >
                 <div className="relative h-14 w-10 shrink-0 overflow-hidden rounded-md bg-zinc-800 border border-white/10">
                   {poster && (
@@ -135,7 +135,7 @@ export function JustFinishedAndMovies({ justFinished, topMovies }: JustFinishedA
                 href={`/anime/${anime.id}`}
                 onMouseEnter={() => setHoveredMovieArt(banner)}
                 onMouseLeave={() => setHoveredMovieArt(null)}
-                className="group flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.02] p-2 sm:p-2.5 hover:border-white/15 hover:bg-white/10 transition-all"
+                className="group flex items-center gap-3 rounded-md border border-white/5 bg-white/[0.02] p-2 sm:p-2.5 hover:border-white/15 hover:bg-white/10 transition-all"
               >
                 <div className="relative h-14 w-10 shrink-0 overflow-hidden rounded-md bg-zinc-800 border border-white/10">
                   {poster && (

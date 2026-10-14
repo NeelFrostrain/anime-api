@@ -44,7 +44,7 @@ export function ContinueTrackingRow() {
               className="group relative flex w-56 sm:w-64 shrink-0 flex-col rounded-md border border-white/10 bg-[#131318] p-3 transition-all duration-150 hover:border-white/25 hover:-translate-y-0.5 shadow-sm"
             >
               {/* Thumbnail with overlay */}
-              <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-zinc-900 border border-white/10">
+              <div className="relative aspect-video w-full overflow-hidden rounded-md bg-zinc-900 border border-white/10">
                 {item.animePoster ? (
                   <Image
                     src={item.animePoster}

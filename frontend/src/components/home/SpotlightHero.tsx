@@ -151,7 +151,7 @@ export function SpotlightHero({ spotlightList }: SpotlightHeroProps) {
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <Link
               href={`/anime/${currentAnime.id}/watch`}
-              className="flex items-center gap-2 rounded-lg bg-[var(--accent)] hover:brightness-110 text-white font-bold text-xs sm:text-sm px-5 py-2.5 transition-all active:scale-95 shadow-md shadow-[var(--accent)]/20"
+              className="flex items-center gap-2 rounded-md bg-[var(--accent)] hover:brightness-110 text-white font-bold text-xs sm:text-sm px-5 py-2.5 transition-all active:scale-95 shadow-md shadow-[var(--accent)]/20"
             >
               <Play className="h-3.5 w-3.5 fill-white" />
               <span>WHERE TO WATCH</span>
@@ -159,7 +159,7 @@ export function SpotlightHero({ spotlightList }: SpotlightHeroProps) {
 
             <Link
               href={`/anime/${currentAnime.id}`}
-              className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm px-4 py-2.5 backdrop-blur-md transition-all active:scale-95"
+              className="flex items-center gap-1.5 rounded-md border border-white/20 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm px-4 py-2.5 backdrop-blur-md transition-all active:scale-95"
             >
               <Info className="h-3.5 w-3.5" />
               <span>DETAILS</span>
@@ -167,7 +167,7 @@ export function SpotlightHero({ spotlightList }: SpotlightHeroProps) {
 
             <button
               onClick={handleWatchlist}
-              className="flex items-center gap-1.5 rounded-lg border border-white/20 bg-black/40 hover:bg-white/10 text-zinc-200 text-xs sm:text-sm px-4 py-2.5 backdrop-blur-md transition-all active:scale-95"
+              className="flex items-center gap-1.5 rounded-md border border-white/20 bg-black/40 hover:bg-white/10 text-zinc-200 text-xs sm:text-sm px-4 py-2.5 backdrop-blur-md transition-all active:scale-95"
             >
               {isInWatchlist ? (
                 <>
@@ -212,14 +212,14 @@ export function SpotlightHero({ spotlightList }: SpotlightHeroProps) {
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrev}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/15 hover:text-white transition-colors"
+              className="flex h-9 w-9 items-center justify-center rounded-md border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/15 hover:text-white transition-colors"
               aria-label="Previous Spotlight"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
               onClick={handleNext}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/15 hover:text-white transition-colors"
+              className="flex h-9 w-9 items-center justify-center rounded-md border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/15 hover:text-white transition-colors"
               aria-label="Next Spotlight"
             >
               <ChevronRight className="h-4 w-4" />

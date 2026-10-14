@@ -36,7 +36,7 @@ export function GenreChipsRow() {
             <Link
               key={genre}
               href={`/genre/${slug}`}
-              className="shrink-0 rounded-lg border border-white/10 bg-white/5 px-3.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-[13px] font-semibold text-zinc-300 hover:border-[var(--accent)] hover:text-white hover:bg-[var(--accent)]/10 transition-all whitespace-nowrap active:scale-95"
+              className="shrink-0 rounded-md border border-white/10 bg-white/5 px-3.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-[13px] font-semibold text-zinc-300 hover:border-[var(--accent)] hover:text-white hover:bg-[var(--accent)]/10 transition-all whitespace-nowrap active:scale-95"
             >
               {genre}
             </Link>

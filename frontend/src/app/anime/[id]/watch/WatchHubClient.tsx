@@ -293,7 +293,7 @@ export function WatchHubClient({
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 w-full sm:w-auto overflow-hidden">
             <Link
               href={`/anime/${anime.id}`}
-              className="flex items-center gap-1.5 shrink-0 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-white/10 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 shrink-0 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-white/10 hover:text-white transition-colors"
             >
               <ChevronLeft className="h-4 w-4 shrink-0" />
               <span>Details</span>
@@ -313,7 +313,7 @@ export function WatchHubClient({
             {/* Lights Off Toggle */}
             <button
               onClick={() => setLightsOff(!lightsOff)}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
                 lightsOff
                   ? "bg-amber-400 text-black font-bold"
                   : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
@@ -326,7 +326,7 @@ export function WatchHubClient({
             {/* Auto-mark Watched Toggle */}
             <button
               onClick={() => setAutoMarkWatched(!autoMarkWatched)}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all ${
                 autoMarkWatched
                   ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
                   : "border border-white/10 bg-white/5 text-zinc-400"
@@ -422,7 +422,7 @@ export function WatchHubClient({
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setAudio("sub")}
-                    className={`flex items-center justify-center gap-1 rounded-lg py-2 text-xs font-bold transition-all ${
+                    className={`flex items-center justify-center gap-1 rounded-md py-2 text-xs font-bold transition-all ${
                       audio === "sub"
                         ? "bg-[var(--accent)] text-white shadow-sm"
                         : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10"
@@ -434,7 +434,7 @@ export function WatchHubClient({
                     disabled={dubAvailable === false}
                     onClick={() => dubAvailable !== false && setAudio("dub")}
                     title={dubAvailable === false ? "DUB not available for this anime" : "Switch to English DUB"}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold transition-all ${
+                    className={`flex items-center justify-center gap-1.5 rounded-md py-2 text-xs font-bold transition-all ${
                       dubAvailable === false
                         ? "border border-white/5 bg-white/[0.02] text-zinc-500 opacity-35 cursor-not-allowed"
                         : audio === "dub"
@@ -463,7 +463,7 @@ export function WatchHubClient({
                 <select
                   value={provider}
                   onChange={(e) => setProvider(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-black/60 px-3 py-2 text-xs font-semibold text-zinc-200 outline-none focus:border-[var(--accent)] transition-colors"
+                  className="w-full rounded-md border border-white/10 bg-black/60 px-3 py-2 text-xs font-semibold text-zinc-200 outline-none focus:border-[var(--accent)] transition-colors"
                 >
                   {EXTRACTION_PROVIDERS.map((p) => (
                     <option key={p.id} value={p.id} className="bg-[#131318] text-white">
@@ -479,7 +479,7 @@ export function WatchHubClient({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleAutoToggle("autoNext")}
-                    className={`flex-1 rounded-lg py-2 text-xs font-bold transition-all ${
+                    className={`flex-1 rounded-md py-2 text-xs font-bold transition-all ${
                       autoNext
                         ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
                         : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
@@ -489,7 +489,7 @@ export function WatchHubClient({
                   </button>
                   <button
                     onClick={() => handleAutoToggle("autoSkipIntro")}
-                    className={`flex-1 rounded-lg py-2 text-xs font-bold transition-all ${
+                    className={`flex-1 rounded-md py-2 text-xs font-bold transition-all ${
                       autoSkipIntro
                         ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
                         : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
@@ -511,7 +511,7 @@ export function WatchHubClient({
                     selectEpisode(playableEpisodes[currentIdx - 1].number);
                   }
                 }}
-                className="flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 sm:px-4 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none transition-colors shrink-0 whitespace-nowrap"
+                className="flex items-center justify-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 sm:px-4 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none transition-colors shrink-0 whitespace-nowrap"
               >
                 <ChevronLeft className="h-4 w-4 shrink-0" />
                 <span className="hidden sm:inline">Prev Episode</span>
@@ -535,7 +535,7 @@ export function WatchHubClient({
                     selectEpisode(playableEpisodes[currentIdx + 1].number);
                   }
                 }}
-                className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--accent)] hover:brightness-110 text-white font-semibold text-xs px-3 sm:px-4 py-2 transition-all disabled:opacity-40 disabled:pointer-events-none shrink-0 whitespace-nowrap"
+                className="flex items-center justify-center gap-1.5 rounded-md bg-[var(--accent)] hover:brightness-110 text-white font-semibold text-xs px-3 sm:px-4 py-2 transition-all disabled:opacity-40 disabled:pointer-events-none shrink-0 whitespace-nowrap"
               >
                 <span className="hidden sm:inline">Next Episode</span>
                 <span className="sm:hidden">Next</span>
@@ -635,7 +635,7 @@ export function WatchHubClient({
                     <button
                       key={ep.number}
                       onClick={() => selectEpisode(ep.number)}
-                      className={`group flex w-full items-center gap-3 rounded-lg p-2 text-left transition-all ${
+                      className={`group flex w-full items-center gap-3 rounded-md p-2 text-left transition-all ${
                         isActive
                           ? "bg-[var(--accent)] text-white shadow-sm ring-1 ring-white/10"
                           : "border border-white/5 bg-white/[0.02] hover:bg-white/10 text-zinc-300"

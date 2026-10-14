@@ -923,7 +923,7 @@ export function VideoPlayer({
               </button>
 
               {showTopServerMenu && (
-                <div className="absolute right-0 top-full mt-1.5 w-48 max-h-72 overflow-y-auto scrollbar-thin rounded-lg bg-[#18181f] border border-white/20 p-1.5 z-50 space-y-0.5 shadow-2xl backdrop-blur-md">
+                <div className="absolute right-0 top-full mt-1.5 w-48 max-h-72 overflow-y-auto scrollbar-thin rounded-md bg-[#18181f] border border-white/20 p-1.5 z-50 space-y-0.5 shadow-2xl backdrop-blur-md">
                   <span className="text-[10px] uppercase font-bold text-zinc-400 px-2 py-1 block border-b border-white/10 sticky top-0 bg-[#18181f] z-10">
                     Select Server
                   </span>
@@ -1216,7 +1216,7 @@ export function VideoPlayer({
               {/* Volume Booster Anime HUD Indicator Toast */}
               {boosterToast !== null && (
                 <div className="absolute top-16 right-4 z-40 pointer-events-none transition-all duration-200">
-                  <div className="flex items-center gap-2.5 rounded-lg border border-amber-500/60 bg-black/90 backdrop-blur-md px-3 py-2 animate-in fade-in zoom-in-95">
+                  <div className="flex items-center gap-2.5 rounded-md border border-amber-500/60 bg-black/90 backdrop-blur-md px-3 py-2 animate-in fade-in zoom-in-95">
                     <div className="flex h-7 w-7 items-center justify-center rounded-md bg-amber-500/20 text-amber-400 border border-amber-500/40">
                       <Zap className="h-4 w-4 fill-amber-400" />
                     </div>

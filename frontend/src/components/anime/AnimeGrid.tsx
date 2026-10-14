@@ -22,7 +22,7 @@ export function AnimeGrid({
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 4xl:grid-cols-9 ultrawide:grid-cols-10 gap-3 sm:gap-4 lg:gap-5 animate-pulse-subtle">
         {Array.from({ length: skeletonCount }).map((_, i) => (
           <div key={i} className="space-y-2.5">
-            <div className="aspect-[2/3] w-full rounded-lg bg-white/[0.03] border border-white/[0.06] skeleton-shimmer" />
+            <div className="aspect-[2/3] w-full rounded-md bg-white/[0.03] border border-white/[0.06] skeleton-shimmer" />
             <div className="h-3.5 w-3/4 rounded bg-white/[0.06]" />
             <div className="h-2.5 w-1/2 rounded bg-white/[0.04]" />
           </div>

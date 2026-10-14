@@ -23,7 +23,7 @@ export function TopSidebar({ topAiring, upcoming }: TopSidebarProps) {
       <div className="flex items-center gap-1.5 border-b border-white/10 pb-3 mb-3">
         <button
           onClick={() => setTab("airing")}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-lg transition-all ${
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-md transition-all ${
             tab === "airing"
               ? "bg-[var(--accent)] text-white shadow-sm"
               : "text-zinc-400 hover:text-white hover:bg-white/5"
@@ -34,7 +34,7 @@ export function TopSidebar({ topAiring, upcoming }: TopSidebarProps) {
         </button>
         <button
           onClick={() => setTab("upcoming")}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-lg transition-all ${
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-bold rounded-md transition-all ${
             tab === "upcoming"
               ? "bg-[var(--accent)] text-white shadow-sm"
               : "text-zinc-400 hover:text-white hover:bg-white/5"
@@ -55,7 +55,7 @@ export function TopSidebar({ topAiring, upcoming }: TopSidebarProps) {
             <Link
               key={anime.id}
               href={`/anime/${anime.id}`}
-              className="group flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-white/5"
+              className="group flex items-center gap-3 rounded-md p-2 transition-colors hover:bg-white/5"
             >
               {/* Rank Number */}
               <span className={`w-5 text-center font-display font-extrabold text-xs shrink-0 ${
