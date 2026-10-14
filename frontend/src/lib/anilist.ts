@@ -1027,13 +1027,17 @@ export const anilist = {
     };
   },
 
-  getAnimeEpisodes: async (id: number | string) => {
+  getAnimeEpisodes: async (id: number | string, existingMedia?: any) => {
     const numId = parseInt(String(id), 10);
+    const mediaPromise = existingMedia
+      ? Promise.resolve({ Media: existingMedia })
+      : queryAniListDirect(DETAIL_QUERY, { id: numId });
+
     const [data, anizipData] = await Promise.all([
-      queryAniListDirect(DETAIL_QUERY, { id: numId }),
+      mediaPromise,
       fetch(`https://api.ani.zip/mappings?anilist_id=${numId}`, {
         headers: { "User-Agent": "Mozilla/5.0" },
-        signal: AbortSignal.timeout(3500),
+        signal: AbortSignal.timeout(2000),
       })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null),
@@ -1084,13 +1088,20 @@ export const anilist = {
     return episodes;
   },
 
-  getAnimeReviews: async (id: number | string): Promise<ReviewItem[]> => {
-    const numId = parseInt(String(id), 10);
-    const data = await queryAniListDirect(DETAIL_QUERY, { id: numId });
-    const malId = data?.Media?.idMal;
+  getAnimeReviews: async (id: number | string, existingMalId?: number | null): Promise<ReviewItem[]> => {
+    let malId = existingMalId;
+    if (!malId) {
+      const numId = parseInt(String(id), 10);
+      const data = await queryAniListDirect(DETAIL_QUERY, { id: numId });
+      malId = data?.Media?.idMal;
+    }
     if (!malId) return [];
+
     try {
-      const res = await fetch(`https://api.jikan.moe/v4/anime/${malId}/reviews`);
+      const res = await fetch(`https://api.jikan.moe/v4/anime/${malId}/reviews`, {
+        headers: { "User-Agent": "Mozilla/5.0" },
+        signal: AbortSignal.timeout(1200),
+      });
       if (res.ok) {
         const jikanData: any = await res.json();
         return (jikanData.data || []).slice(0, 10).map((r: any) => ({
