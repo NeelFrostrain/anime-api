@@ -544,10 +544,10 @@ export function WatchHubClient({
 
             {/* Unified Playback, Episode Navigation & Source Hub */}
             <div className="rounded-md border border-white/10 bg-[#131318] p-2 sm:p-2.5 space-y-2 shadow-sm relative z-30">
-              {/* Row 1: Unified Quick Controls Bar */}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                {/* Left Side: Episode Navigation & Stream Mode */}
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
+              {/* Row 1: Unified Quick Controls Bar (Mobile-first responsive layout) */}
+              <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-2 sm:gap-2.5">
+                {/* Deck 1 (Left on Desktop, Row 1 on Mobile): Episode Navigation, Stream Mode & Audio */}
+                <div className="flex items-center justify-between xl:justify-start gap-1.5 sm:gap-2 w-full xl:w-auto">
                   {/* Episode Navigation (Prev / EP / Next) */}
                   <div className="flex items-center gap-1 shrink-0">
                     <button
@@ -558,14 +558,14 @@ export function WatchHubClient({
                           selectEpisode(playableEpisodes[currentIdx - 1].number);
                         }
                       }}
-                      className="h-7 px-2.5 flex items-center gap-1 rounded border border-white/10 bg-white/5 text-xs font-semibold text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                      className="h-7 px-2 sm:px-2.5 flex items-center gap-1 rounded border border-white/10 bg-white/5 text-xs font-semibold text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors"
                       title="Previous Episode"
                     >
                       <ChevronLeft className="h-3.5 w-3.5 shrink-0" />
-                      <span>Prev</span>
+                      <span className="hidden xs:inline">Prev</span>
                     </button>
 
-                    <div className="h-7 px-2.5 flex items-center justify-center rounded bg-white/[0.04] border border-white/10 text-center">
+                    <div className="h-7 px-2 sm:px-2.5 flex items-center justify-center rounded bg-white/[0.04] border border-white/10 text-center">
                       <span className="text-xs font-mono font-bold text-zinc-200 whitespace-nowrap">
                         EP {currentEpNum} <span className="text-zinc-600 font-normal">/</span> {playableEpisodes.length || anime.episodes || "?"}
                       </span>
@@ -582,82 +582,90 @@ export function WatchHubClient({
                           selectEpisode(playableEpisodes[currentIdx + 1].number);
                         }
                       }}
-                      className="h-7 px-2.5 flex items-center gap-1 rounded bg-[var(--accent)] hover:brightness-110 text-white font-semibold text-xs transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
+                      className="h-7 px-2 sm:px-2.5 flex items-center gap-1 rounded bg-[var(--accent)] hover:brightness-110 text-white font-semibold text-xs transition-all disabled:opacity-30 disabled:pointer-events-none shadow-sm"
                       title="Next Episode"
                     >
-                      <span>Next</span>
+                      <span className="hidden xs:inline">Next</span>
                       <ChevronRight className="h-3.5 w-3.5 shrink-0" />
                     </button>
                   </div>
 
-                  <div className="h-4 w-px bg-white/10 hidden sm:block mx-0.5 shrink-0" />
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    {/* Stream / Embed Mode Switcher */}
+                    {hasEmbed ? (
+                      <div className="h-7 flex items-center rounded bg-white/5 border border-white/10 p-0.5 shrink-0">
+                        <button
+                          onClick={() => setPlayerMode("stream")}
+                          className={`h-full rounded px-2 text-xs font-semibold flex items-center gap-1 transition-all ${
+                            playerMode === "stream"
+                              ? "bg-[var(--accent)] text-white shadow-sm"
+                              : "text-zinc-400 hover:text-white"
+                          }`}
+                          title="Fast Direct HLS Stream"
+                        >
+                          <Zap className="h-3 w-3 text-amber-400 shrink-0" />
+                          <span className="hidden sm:inline">Stream</span>
+                        </button>
+                        <button
+                          onClick={() => setPlayerMode("embed")}
+                          className={`h-full rounded px-2 text-xs font-semibold flex items-center gap-1 transition-all ${
+                            playerMode === "embed"
+                              ? "bg-[var(--accent)] text-white shadow-sm"
+                              : "text-zinc-400 hover:text-white"
+                          }`}
+                          title="Embedded Video Player"
+                        >
+                          <Layers className="h-3 w-3 shrink-0" />
+                          <span className="hidden sm:inline">Embed</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-7 hidden sm:flex items-center gap-1 px-2.5 rounded border border-white/10 bg-white/5 text-xs font-medium text-zinc-400 select-none shrink-0">
+                        <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                        <span>Fast Stream</span>
+                      </div>
+                    )}
 
-                  {/* Stream / Embed Mode Switcher */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => setPlayerMode("stream")}
-                      className={`h-7 px-2.5 flex items-center gap-1.5 rounded text-xs font-semibold whitespace-nowrap transition-all ${
-                        playerMode === "stream"
-                          ? "bg-[var(--accent)] text-white shadow-sm"
-                          : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
-                      }`}
-                    >
-                      <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                      <span>Fast Stream</span>
-                    </button>
+                    <div className="h-4 w-px bg-white/10 hidden xl:block mx-0.5 shrink-0" />
 
-                    {hasEmbed && (
+                    {/* SUB / DUB Toggle */}
+                    <div className="h-7 flex items-center rounded bg-white/5 border border-white/10 p-0.5 shrink-0">
                       <button
-                        onClick={() => setPlayerMode("embed")}
-                        className={`h-7 px-2.5 flex items-center gap-1.5 rounded text-xs font-semibold whitespace-nowrap transition-all ${
-                          playerMode === "embed"
+                        onClick={() => setAudio("sub")}
+                        className={`h-full rounded px-2 sm:px-2.5 text-xs font-bold transition-all flex items-center justify-center ${
+                          audio === "sub"
                             ? "bg-[var(--accent)] text-white shadow-sm"
-                            : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
+                            : "text-zinc-400 hover:text-white"
                         }`}
                       >
-                        <Layers className="h-3.5 w-3.5 shrink-0" />
-                        <span>Embed</span>
+                        SUB
                       </button>
-                    )}
+                      <button
+                        disabled={dubAvailable === false}
+                        onClick={() => dubAvailable !== false && setAudio("dub")}
+                        title={dubAvailable === false ? "DUB not available for this anime" : "Switch to English DUB"}
+                        className={`h-full rounded px-2 sm:px-2.5 text-xs font-bold transition-all flex items-center justify-center ${
+                          dubAvailable === false
+                            ? "opacity-30 cursor-not-allowed text-zinc-500 line-through"
+                            : audio === "dub"
+                            ? "bg-[var(--accent)] text-white shadow-sm"
+                            : "text-zinc-400 hover:text-white"
+                        }`}
+                      >
+                        DUB
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                {/* Right Side: Audio, Server, Automation & Quick Actions */}
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
-                  {/* SUB / DUB Toggle */}
-                  <div className="h-7 flex items-center rounded bg-white/5 border border-white/10 p-0.5 shrink-0">
-                    <button
-                      onClick={() => setAudio("sub")}
-                      className={`h-full rounded px-2.5 text-xs font-bold transition-all flex items-center justify-center ${
-                        audio === "sub"
-                          ? "bg-[var(--accent)] text-white shadow-sm"
-                          : "text-zinc-400 hover:text-white"
-                      }`}
-                    >
-                      SUB
-                    </button>
-                    <button
-                      disabled={dubAvailable === false}
-                      onClick={() => dubAvailable !== false && setAudio("dub")}
-                      title={dubAvailable === false ? "DUB not available for this anime" : "Switch to English DUB"}
-                      className={`h-full rounded px-2.5 text-xs font-bold transition-all flex items-center justify-center ${
-                        dubAvailable === false
-                          ? "opacity-30 cursor-not-allowed text-zinc-500 line-through"
-                          : audio === "dub"
-                          ? "bg-[var(--accent)] text-white shadow-sm"
-                          : "text-zinc-400 hover:text-white"
-                      }`}
-                    >
-                      DUB
-                    </button>
-                  </div>
-
+                {/* Deck 2 (Right on Desktop, Row 2 on Mobile): Server, Automations & Reload */}
+                <div className="flex items-center justify-between xl:justify-end gap-1.5 sm:gap-2 w-full xl:w-auto">
                   {/* Custom Extraction Server Dropdown */}
                   <div ref={serverDropdownRef} className="relative shrink-0">
                     <button
                       type="button"
                       onClick={() => setShowServerDropdown((prev) => !prev)}
-                      className={`h-7 flex items-center gap-1.5 rounded border px-2.5 text-xs font-semibold transition-all select-none ${
+                      className={`h-7 flex items-center gap-1.5 rounded border px-2 sm:px-2.5 text-xs font-semibold transition-all select-none ${
                         showServerDropdown
                           ? "bg-white/15 border-white/30 text-white shadow-sm ring-1 ring-[var(--accent)]/40"
                           : "border-white/10 bg-black/60 text-zinc-200 hover:text-white hover:bg-white/10"
@@ -666,7 +674,7 @@ export function WatchHubClient({
                       aria-expanded={showServerDropdown}
                     >
                       <Server className="h-3 w-3 text-amber-400 shrink-0" />
-                      <span className="truncate max-w-[105px] sm:max-w-[135px]">
+                      <span className="truncate max-w-[85px] xs:max-w-[110px] sm:max-w-[135px]">
                         {EXTRACTION_PROVIDERS.find((p) => p.id === provider)?.name || PROVIDER_NAMES[provider] || provider}
                       </span>
                       <ChevronDown
@@ -678,7 +686,7 @@ export function WatchHubClient({
 
                     {showServerDropdown && (
                       <div
-                        className={`absolute left-0 sm:left-auto sm:right-0 ${
+                        className={`absolute left-0 xl:left-auto xl:right-0 ${
                           dropdownDirection === "up" ? "bottom-full mb-1.5" : "top-full mt-1.5"
                         } w-52 max-h-64 overflow-y-auto scrollbar-thin rounded-lg bg-[#141419]/95 border border-white/20 p-1.5 z-[100] space-y-0.5 shadow-2xl backdrop-blur-md`}
                       >
@@ -750,31 +758,31 @@ export function WatchHubClient({
                     </div>
                   )}
 
-                  <div className="h-4 w-px bg-white/10 hidden sm:block mx-0.5 shrink-0" />
+                  <div className="h-4 w-px bg-white/10 hidden xl:block mx-0.5 shrink-0" />
 
                   {/* Automation Toggles & Reload */}
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => handleAutoToggle("autoNext")}
-                      className={`h-7 px-2.5 flex items-center rounded text-xs font-bold transition-all ${
+                      className={`h-7 px-2 sm:px-2.5 flex items-center rounded text-[11px] sm:text-xs font-bold transition-all ${
                         autoNext
                           ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
                           : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
                       }`}
                       title="Toggle Auto-Play Next Episode"
                     >
-                      Auto-Next
+                      <span className="hidden xs:inline">Auto-</span>Next
                     </button>
                     <button
                       onClick={() => handleAutoToggle("autoSkipIntro")}
-                      className={`h-7 px-2.5 flex items-center rounded text-xs font-bold transition-all ${
+                      className={`h-7 px-2 sm:px-2.5 flex items-center rounded text-[11px] sm:text-xs font-bold transition-all ${
                         autoSkipIntro
                           ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
                           : "border border-white/10 bg-white/5 text-zinc-400 hover:text-white"
                       }`}
                       title="Skip Opening Credits (+85s)"
                     >
-                      Auto-Skip (+85s)
+                      <span className="hidden sm:inline">Auto-</span>Skip<span className="hidden sm:inline"> (+85s)</span><span className="sm:hidden"> 85s</span>
                     </button>
 
                     <button
