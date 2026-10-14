@@ -1107,8 +1107,8 @@ export function VideoPlayer({
           </div>
         )}
 
-        {/* Buffering Indicator - Subtle non-blocking spinner */}
-        {isBuffering && !isLoadingStreams && !hasFatalError && (
+        {/* Buffering Indicator - Subtle non-blocking spinner (stream mode only) */}
+        {playerMode === "stream" && isBuffering && !isLoadingStreams && !hasFatalError && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/30 backdrop-blur-[1px] pointer-events-none transition-opacity duration-200">
             <div className="h-10 w-10 rounded-full border-2 border-white/20 border-t-[var(--accent)] animate-spin" />
             <span className="mt-2.5 text-[11px] font-semibold text-zinc-300">
@@ -1117,8 +1117,8 @@ export function VideoPlayer({
           </div>
         )}
 
-        {/* Fatal Error Indicator with Quick Actions */}
-        {hasFatalError && !isLoadingStreams && (
+        {/* Fatal Error Indicator with Quick Actions (stream mode only) */}
+        {playerMode === "stream" && hasFatalError && !isLoadingStreams && (
           <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm p-4 text-center pointer-events-auto">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/30 mb-2">
               <AlertTriangle className="h-5 w-5" />
@@ -1176,8 +1176,14 @@ export function VideoPlayer({
                   type="button"
                   onClick={() => {
                     setPlayerMode("stream");
+                    setIsBuffering(false);
+                    setHasFatalError(false);
                     const streamIdx = streams.findIndex((s) => s.type !== "embed");
-                    if (streamIdx !== -1) setSelectedStreamIdx(streamIdx);
+                    if (streamIdx !== -1) {
+                      setSelectedStreamIdx(streamIdx);
+                    } else {
+                      onRetry?.();
+                    }
                   }}
                   className="flex items-center gap-1 rounded bg-[var(--accent)] hover:brightness-110 text-white font-bold px-2.5 py-1 text-[11px] transition-all cursor-pointer"
                 >
