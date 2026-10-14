@@ -605,8 +605,11 @@ async def extract_simple(
     except Exception as e:
         log_warn(f"Native race failed for '{query}', falling back to pipe: {e}", tag="EXTRACT")
 
-    data = await fetch_raw_episodes(anilist_id)
-    providers = data.get("providers", {})
+    try:
+        data = await asyncio.wait_for(fetch_raw_episodes(anilist_id), timeout=3.5)
+        providers = data.get("providers", {}) if isinstance(data, dict) else {}
+    except Exception as e:
+        providers = {}
 
     if not providers:
         raise HTTPException(status_code=404, detail="no providers available for this anime")

@@ -78,17 +78,40 @@ async def _watch_one(mod, name, anilist_id, ep, audio, ctx):
                 existing = _SUBTITLE_CACHE.get(cache_key, (0, []))[1]
                 _SUBTITLE_CACHE[cache_key] = (time.time(), merge_subtitles([{"subtitles": existing + raw_subs}]))
 
-            valid_streams = [
-                s for s in streams
-                if isinstance(s, dict)
-                and "nukitashi.top" not in s.get("url", "")
-                and "flixcloud.cc" not in s.get("url", "")
-            ]
+            valid_streams = []
+            embed_streams = []
+            for s in streams:
+                if not isinstance(s, dict):
+                    continue
+                url = s.get("url", "")
+                embed_url = s.get("embed") or (url if s.get("type") == "embed" else None)
+                # Check for dead / encrypted direct streams like flixcloud.cc, nukitashi, or fallencdn
+                is_broken_direct = any(bad in url for bad in ("nukitashi.top", "flixcloud.cc", "fallencdn.top", "rundowncdn.top", "fetch8.flixcloud", "fetch9.flixcloud"))
+                if is_broken_direct and embed_url:
+                    embed_streams.append({
+                        **s,
+                        "url": embed_url,
+                        "type": "embed",
+                        "embed": embed_url,
+                    })
+                elif not is_broken_direct and url:
+                    valid_streams.append(s)
+                elif embed_url:
+                    embed_streams.append({
+                        **s,
+                        "url": embed_url,
+                        "type": "embed",
+                        "embed": embed_url,
+                    })
+
             if valid_streams:
                 has_stream = any(s.get("type") in ("hls", "mp4") for s in valid_streams)
                 _watch_cache[key] = (time.time() + WATCH_CACHE_TTL, valid_streams)
                 return name, valid_streams, dt, True, has_stream
-            elif raw_subs or any(s.get("embed") for s in streams if isinstance(s, dict)):
+            elif embed_streams:
+                _watch_cache[key] = (time.time() + WATCH_CACHE_TTL, embed_streams)
+                return name, embed_streams, dt, True, False
+            elif raw_subs:
                 _watch_cache[key] = (time.time() + WATCH_CACHE_TTL, streams)
                 return name, streams, dt, True, False
         return name, None, dt, False, False

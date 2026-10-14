@@ -21,9 +21,8 @@ _proxy_client: httpx.AsyncClient | None = None
 
 def get_proxy_client() -> httpx.AsyncClient:
     global _proxy_client
-    if _proxy_client is None or _proxy_client.is_closed:
         _proxy_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(connect=6.0, read=30.0, write=10.0, pool=30.0),
+            timeout=httpx.Timeout(connect=5.0, read=12.0, write=10.0, pool=15.0),
             limits=httpx.Limits(max_keepalive_connections=100, max_connections=150, keepalive_expiry=120.0),
             verify=False,
             follow_redirects=True,
@@ -126,6 +125,13 @@ async def proxy_m3u8(url: str, referer: str = "", audio: str = "sub"):
             return Response(content=resp.content, status_code=resp.status_code, media_type="text/plain")
 
         content = resp.text
+        if not content.strip().startswith('#') and '#EXTM3U' not in content:
+            log_warn(f"Upstream returned non-m3u8/encrypted payload for {url[:85]}", tag="PROXY")
+            return Response(
+                content='{"detail":"Upstream returned encrypted or invalid m3u8 playlist"}',
+                status_code=502,
+                media_type="application/json"
+            )
         lines = []
 
         is_variant = False

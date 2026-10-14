@@ -206,6 +206,8 @@ export function VideoPlayer({
     }
   }, [autoPlay]);
 
+  const triedStreamsRef = useRef<Set<number>>(new Set());
+
   // Reset auto-skip, fatal error, and index on episode / stream list change
   useEffect(() => {
     setHasAutoSkipped(false);
@@ -215,35 +217,41 @@ export function VideoPlayer({
     userPausedRef.current = false;
     stallCountRef.current = 0;
     lastPlayTimeRef.current = -1;
+    triedStreamsRef.current.clear();
   }, [episodeNumber, streams]);
 
-  // Seamless auto-recovery when a stream fails, 404s, 500s or hangs
+  // Seamless auto-recovery when a stream fails, 404s, 500s or hangs (without infinite loops)
   const handleAutoRecoverStream = useCallback(() => {
-    // 1. Advance to next stream in list if available
-    if (streams && selectedStreamIdx + 1 < streams.length) {
-      const nextStream = streams[selectedStreamIdx + 1];
-      console.log(`[VideoPlayer] Stream index ${selectedStreamIdx} stalled/failed, auto-advancing to stream ${selectedStreamIdx + 1}`);
-      setSelectedStreamIdx((prev) => prev + 1);
-      setHasFatalError(false);
-      setIsBuffering(true);
-      userPausedRef.current = false;
-      stallCountRef.current = 0;
-      lastPlayTimeRef.current = -1;
-      if (nextStream?.type === "embed") {
-        setPlayerMode("embed");
+    triedStreamsRef.current.add(selectedStreamIdx);
+
+    // 1. Advance to next untried stream in list if available
+    if (streams && streams.length > 0) {
+      const nextIdx = streams.findIndex((_, idx) => idx > selectedStreamIdx && !triedStreamsRef.current.has(idx));
+      if (nextIdx !== -1) {
+        const nextStream = streams[nextIdx];
+        console.log(`[VideoPlayer] Stream index ${selectedStreamIdx} stalled/failed, auto-advancing to stream ${nextIdx}`);
+        setSelectedStreamIdx(nextIdx);
+        setHasFatalError(false);
+        setIsBuffering(true);
+        userPausedRef.current = false;
+        stallCountRef.current = 0;
+        lastPlayTimeRef.current = -1;
+        if (nextStream?.type === "embed") {
+          setPlayerMode("embed");
+        }
+        return;
       }
-      return;
     }
 
-    // 2. If all direct streams failed or no more streams, auto-switch to Embed mode if available
+    // 2. If direct streams failed, auto-switch to Embed mode if available
     const fallbackEmbed =
       activeStream?.embed ||
       (activeStream?.type === "embed" ? activeStream.url : null) ||
       streams.find((s) => s.embed)?.embed ||
       streams.find((s) => s.type === "embed")?.url;
 
-    if (fallbackEmbed) {
-      console.log("[VideoPlayer] Direct streams failed or finished, auto-falling back to Embed player");
+    if (fallbackEmbed && playerMode !== "embed") {
+      console.log("[VideoPlayer] Direct streams failed, auto-falling back to Embed player");
       setPlayerMode("embed");
       setHasFatalError(false);
       setIsBuffering(false);
@@ -251,22 +259,11 @@ export function VideoPlayer({
       return;
     }
 
-    // 3. If direct streams failed but we have earlier streams (like HD-1), cycle back to 0
-    if (streams && streams.length > 1 && selectedStreamIdx > 0) {
-      console.log("[VideoPlayer] Cycling back to primary stream 0");
-      setSelectedStreamIdx(0);
-      setHasFatalError(false);
-      setIsBuffering(true);
-      userPausedRef.current = false;
-      stallCountRef.current = 0;
-      lastPlayTimeRef.current = -1;
-      return;
-    }
-
-    // 4. Otherwise show recovery overlay with one-click retry / switch actions
+    // 3. Otherwise stop buffering and show recovery overlay with one-click actions
+    console.warn("[VideoPlayer] All available streams for current provider failed or stalled.");
     setHasFatalError(true);
     setIsBuffering(false);
-  }, [streams, selectedStreamIdx, activeStream]);
+  }, [streams, selectedStreamIdx, activeStream, playerMode]);
 
   // Active Playback Monitor & Auto-Recovery Ticker: checks every 1000ms
   useEffect(() => {
@@ -280,35 +277,42 @@ export function VideoPlayer({
       const video = videoRef.current;
       if (!video) return;
 
-      // If user deliberately paused, or video is legitimately paused / not yet started by user, do not trigger stall recovery
-      if (userPausedRef.current || video.paused || !isPlaying) {
-        stallCountRef.current = 0;
-        return;
-      }
-
-      const current = video.currentTime;
-      // Check if video is actually progressing while isPlaying is active
-      const isProgressing = lastPlayTimeRef.current >= 0 && current > lastPlayTimeRef.current;
-      lastPlayTimeRef.current = current;
-
-      if (!isProgressing || video.readyState < 2) {
+      // Watchdog for initial buffering stall (when video hasn't started playing or is loading)
+      if (isBuffering && !isLoadingStreams && !hasFatalError) {
         stallCountRef.current += 1;
-        // If actively playing but stuck without progress for >= 8 seconds:
         if (stallCountRef.current >= 8) {
-          console.warn(`[VideoPlayer] Stream index ${selectedStreamIdx} stalled for 8s (time=${current.toFixed(2)}, readyState=${video.readyState}), auto-adjusting to next stream...`);
+          console.warn(`[VideoPlayer] Stream index ${selectedStreamIdx} buffering stalled for 8s (currentTime=${video.currentTime.toFixed(2)}, readyState=${video.readyState}), auto-adjusting to next stream...`);
           stallCountRef.current = 0;
           lastPlayTimeRef.current = -1;
           handleAutoRecoverStream();
+          return;
+        }
+      } else if (!userPausedRef.current && !video.paused && isPlaying) {
+        const current = video.currentTime;
+        const isProgressing = lastPlayTimeRef.current >= 0 && current > lastPlayTimeRef.current;
+        lastPlayTimeRef.current = current;
+
+        if (!isProgressing || video.readyState < 2) {
+          stallCountRef.current += 1;
+          if (stallCountRef.current >= 8) {
+            console.warn(`[VideoPlayer] Stream index ${selectedStreamIdx} playback stalled for 8s (time=${current.toFixed(2)}, readyState=${video.readyState}), auto-adjusting to next stream...`);
+            stallCountRef.current = 0;
+            lastPlayTimeRef.current = -1;
+            handleAutoRecoverStream();
+            return;
+          }
+        } else {
+          stallCountRef.current = 0;
+          setHasFatalError(false);
+          setIsBuffering(false);
         }
       } else {
         stallCountRef.current = 0;
-        setHasFatalError(false);
-        setIsBuffering(false);
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [playerMode, isLoadingStreams, streams, selectedStreamIdx, handleAutoRecoverStream]);
+  }, [playerMode, isLoadingStreams, streams, selectedStreamIdx, isBuffering, hasFatalError, isPlaying, handleAutoRecoverStream]);
 
   const handleRetryPlayback = () => {
     setHasFatalError(false);

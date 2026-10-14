@@ -267,13 +267,13 @@ export function WatchHubClient({
         }
       }
     }
-    if (anime.status !== "NOT_YET_RELEASED" && dubAvailable === null) {
+    if (anime.status !== "NOT_YET_RELEASED" && dubAvailable === null && audio !== "dub") {
       checkDub();
     }
     return () => {
       isCancelled = true;
     };
-  }, [anime.id, anime.status, dubAvailable]);
+  }, [anime.id, anime.status, dubAvailable, audio]);
 
   // Fetch real stream from backend extraction engine
   const fetchStream = useCallback(
@@ -299,20 +299,9 @@ export function WatchHubClient({
         if (isDubError) {
           setDubAvailable(false);
           setAudio("sub");
-          setDubNotification("English DUB is not available for this anime. Switched to SUB.");
+          setDubNotification("English DUB is not available for this episode. Switched to SUB.");
           setTimeout(() => setDubNotification(null), 5000);
-          try {
-            const subRes = await api.extractEpisode(
-              anime.id,
-              epNum,
-              "sub",
-              prov === "auto" ? undefined : prov
-            );
-            setStreamResult(subRes);
-            return;
-          } catch (subErr: any) {
-            setExtractError(subErr?.message || `No stream found for Episode ${epNum}.`);
-          }
+          return;
         } else {
           setExtractError(
             errMsg || `No ${aud.toUpperCase()} stream found for Episode ${epNum}. Try selecting a different server.`
