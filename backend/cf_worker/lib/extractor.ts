@@ -412,6 +412,88 @@ export async function fetchEpisodesList(anilistId: number, kv?: KVNamespace): Pr
   return result;
 }
 
+// Extract streams and subtitles from Reanime / Flixcloud
+export async function extractReanimeStreams(
+  anilistId: number,
+  episode: number,
+  audio: "sub" | "dub" = "sub"
+): Promise<{ streams: any[]; subtitles: any[] } | null> {
+  try {
+    const res = await fetch(`https://reanime.to/api/flix/${anilistId}/${episode}`, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        Referer: "https://reanime.to/",
+      },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as any;
+    if (!data?.success || !Array.isArray(data.servers) || data.servers.length === 0) {
+      return null;
+    }
+
+    const targetAudio = (audio || "sub").toLowerCase();
+    const filtered = data.servers.filter((s: any) => {
+      const dt = (s.dataType || "").toLowerCase();
+      return targetAudio === "dub" ? dt.includes("dub") : dt.includes("sub") || dt === "";
+    });
+
+    const toUse = filtered.length > 0 ? filtered : data.servers;
+
+    // Fetch subtitles from first flixcloud embed HTML if possible
+    let subtitles: any[] = [];
+    try {
+      const firstEmbed = toUse[0]?.dataLink;
+      if (firstEmbed) {
+        const embedRes = await fetch(firstEmbed, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            Referer: "https://reanime.to/",
+          },
+          signal: AbortSignal.timeout(3000),
+        });
+        if (embedRes.ok) {
+          const html = await embedRes.text();
+          const srtMatches = [...html.matchAll(/https?:\/\/[^\s"'<>]+\.(?:srt|vtt)/g)];
+          if (srtMatches.length > 0) {
+            const seen = new Set<string>();
+            for (const m of srtMatches) {
+              const url = m[0];
+              if (!seen.has(url)) {
+                seen.add(url);
+                const isEng = url.toLowerCase().includes("eng") || url.toLowerCase().includes("_en.");
+                subtitles.push({
+                  url,
+                  label: isEng ? "English" : "Subtitle",
+                  lang: isEng ? "en" : "und",
+                  default: isEng,
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch {}
+
+    const streams = toUse.map((s: any) => ({
+      url: s.dataLink,
+      quality: "auto",
+      isM3U8: false,
+      server: `FlixCloud (${s.serverName || "HD"})`,
+      type: "embed",
+      audio: s.dataType?.includes("dub") ? "dub" : "sub",
+      embed: s.dataLink,
+      subtitles,
+    }));
+
+    return { streams, subtitles };
+  } catch {
+    return null;
+  }
+}
+
 export async function extractStreamSources(
   query: string | number,
   episode = 1,
@@ -422,24 +504,42 @@ export async function extractStreamSources(
   const anilistId = Number(query);
   const targetCategory = audio === "dub" ? "dub" : "sub";
   const targetProvider = provider || "auto";
-  const cacheKey = `stream:v4:${anilistId}:${episode}:${targetCategory}:${targetProvider}`;
+  const cacheKey = `stream:v5:${anilistId}:${episode}:${targetCategory}:${targetProvider}`;
 
   if (kv) {
     try {
       const cached = await kv.get(cacheKey, "json");
-      if (cached && (cached as any).provider === "kaa") return cached;
+      if (cached && (cached as any).streams && (cached as any).streams.length > 0) return cached;
     } catch {}
   }
 
-  // 1. Primary Direct HLS Extraction (Kaa + Krussdomi)
   let directStreams: any[] | null = null;
-  if (!provider || provider === "auto" || provider === "kaa" || provider === "vidstreaming") {
+  let reanimeData: { streams: any[]; subtitles: any[] } | null = null;
+
+  if (targetProvider === "reanime") {
+    try {
+      reanimeData = await extractReanimeStreams(anilistId, episode, targetCategory);
+    } catch {}
+    if (!reanimeData || reanimeData.streams.length === 0) {
+      try {
+        directStreams = await extractKaaStreams(anilistId, episode, targetCategory, kv);
+      } catch {}
+    }
+  } else {
+    // 1. Primary Direct HLS Extraction (Kaa + Krussdomi)
     try {
       directStreams = await extractKaaStreams(anilistId, episode, targetCategory, kv);
     } catch {}
+
+    // 2. High-speed Reanime / Flixcloud fallback
+    if (!directStreams || directStreams.length === 0 || targetProvider === "auto") {
+      try {
+        reanimeData = await extractReanimeStreams(anilistId, episode, targetCategory);
+      } catch {}
+    }
   }
 
-  // Fallback verified embed providers (adblock safe with iframe sandbox)
+  // Backup verified embed providers (adblock safe with iframe sandbox)
   const embedStreams = [
     {
       url: `https://vidsrc.su/embed/anime/${anilistId}/${episode}`,
@@ -473,28 +573,47 @@ export async function extractStreamSources(
     },
   ];
 
-  const allStreams = directStreams && directStreams.length > 0
-    ? directStreams
-    : [];
+  const allStreams: any[] = [];
+  if (directStreams && directStreams.length > 0) {
+    allStreams.push(...directStreams);
+  }
+  if (reanimeData && reanimeData.streams.length > 0) {
+    allStreams.push(...reanimeData.streams);
+  }
+  if (allStreams.length === 0) {
+    allStreams.push(...embedStreams);
+  }
+
+  const allSubtitles = [
+    ...(directStreams?.[0]?.subtitles || []),
+    ...(reanimeData?.subtitles || []),
+  ];
+
+  const wonProvider =
+    directStreams && directStreams.length > 0
+      ? "kaa"
+      : reanimeData && reanimeData.streams.length > 0
+      ? "reanime"
+      : "embed";
 
   const result = {
     success: allStreams.length > 0,
     anilistId,
     episode,
     type: targetCategory,
-    provider: directStreams && directStreams.length > 0 ? "kaa" : "none",
+    provider: wonProvider,
     defaultProvider: "kaa",
     requestedProvider: provider || "auto",
     streams: allStreams,
     sources: allStreams,
-    subtitles: directStreams?.[0]?.subtitles || [],
+    subtitles: allSubtitles,
     intro: { start: 0, end: 0 },
     outro: { start: 0, end: 0 },
   };
 
   if (kv) {
     try {
-      const ttl = directStreams && directStreams.length > 0 ? 1800 : 60;
+      const ttl = allStreams.length > 0 ? 1800 : 60;
       await kv.put(cacheKey, JSON.stringify(result), { expirationTtl: ttl });
     } catch {}
   }

@@ -6,7 +6,14 @@ function resolveReferer(url: string, explicitReferer?: string | null): string {
   if (lower.includes("animegg") || lower.includes("vidcache")) return "https://www.animegg.org/";
   if (lower.includes("nexabloom") || lower.includes("megaplay")) return "https://megaplay.buzz/";
   if (lower.includes("echovideo") || lower.includes("savedly")) return "https://play.echovideo.ru/";
-  if (lower.includes("advancedairesearchlab") || lower.includes("habibikun")) return "https://krussdomi.com/";
+  if (
+    lower.includes("advancedairesearchlab") ||
+    lower.includes("habibikun") ||
+    lower.includes("babybayw") ||
+    lower.includes("krussdomi")
+  ) {
+    return "https://krussdomi.com/";
+  }
   if (lower.includes("xin-cdn")) return "https://anizone.to/";
   if (lower.includes("flixcloud") || lower.includes("megacloud")) return "https://megacloud.tv/";
   if (lower.includes("rabbitstream")) return "https://rabbitstream.net/";
