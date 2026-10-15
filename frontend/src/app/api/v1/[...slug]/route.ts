@@ -29,13 +29,28 @@ async function proxyToBackend(req: NextRequest, slug: string[]) {
   );
 
   const forwardHeaders = new Headers();
+  const allowedHeaders = [
+    "authorization",
+    "cookie",
+    "content-type",
+    "accept",
+    "accept-language",
+    "cache-control",
+  ];
   req.headers.forEach((value, key) => {
     const lower = key.toLowerCase();
-    // Do NOT forward host, connection, or accept-encoding so fetch handles encoding properly
-    if (!["host", "connection", "accept-encoding"].includes(lower)) {
+    if (allowedHeaders.includes(lower)) {
       forwardHeaders.set(key, value);
     }
   });
+
+  const incomingUa = req.headers.get("user-agent");
+  forwardHeaders.set(
+    "user-agent",
+    incomingUa && !incomingUa.toLowerCase().includes("vercel")
+      ? incomingUa
+      : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+  );
 
   const fetchOptions: RequestInit = {
     method: req.method,
