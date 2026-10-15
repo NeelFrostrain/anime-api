@@ -197,7 +197,6 @@ export async function handleM3u8Proxy(
   };
   if (referer) {
     headers["Referer"] = referer;
-    headers["Origin"] = resolveOrigin(referer);
   }
 
   const upstreamRes = await fetch(url, { headers });
@@ -245,7 +244,6 @@ export async function handleSegmentProxy(
   };
   if (referer) {
     headers["Referer"] = referer;
-    headers["Origin"] = resolveOrigin(referer);
   }
 
   // Forward Range header if client requested range (for seeking in mp4/ts)

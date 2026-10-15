@@ -115,7 +115,11 @@ export async function fetchShowTitles(anilistId: number, kv?: KVNamespace): Prom
       try {
         const alRes = await fetch("https://graphql.anilist.co", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+          },
           body: JSON.stringify({
             query: `query($id: Int) { Media(id: $id) { title { english romaji native } synonyms } }`,
             variables: { id: anilistId },
@@ -185,7 +189,11 @@ export async function extractKaaStreams(
     try {
       const sRes = await fetch("https://kaa.lt/api/fsearch", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        },
         body: JSON.stringify({ page: 1, query: q }),
         signal: AbortSignal.timeout(3000),
       });
@@ -466,15 +474,15 @@ export async function extractStreamSources(
   ];
 
   const allStreams = directStreams && directStreams.length > 0
-    ? [...directStreams, ...embedStreams]
-    : embedStreams;
+    ? directStreams
+    : [];
 
   const result = {
-    success: true,
+    success: allStreams.length > 0,
     anilistId,
     episode,
     type: targetCategory,
-    provider: directStreams && directStreams.length > 0 ? "kaa" : "vidsrc",
+    provider: directStreams && directStreams.length > 0 ? "kaa" : "none",
     defaultProvider: "kaa",
     requestedProvider: provider || "auto",
     streams: allStreams,

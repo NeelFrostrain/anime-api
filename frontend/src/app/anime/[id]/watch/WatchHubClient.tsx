@@ -276,8 +276,8 @@ export function WatchHubClient({
         const hasDirectStream = res?.streams?.some((s: any) => s.type !== "embed");
         if (hasDirectStream) {
           setPlayerMode("stream");
-        } else if (res?.streams && res.streams.length > 0 && res.streams.every((s: any) => s.type === "embed")) {
-          setPlayerMode("embed");
+        } else if (!res?.streams || res.streams.length === 0) {
+          setExtractError(`No stream found for Episode ${epNum} on the selected server. Please select another server.`);
         }
       } catch (err: any) {
         const errMsg = err?.message || "";

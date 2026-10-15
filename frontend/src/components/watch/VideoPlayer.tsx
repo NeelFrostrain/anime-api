@@ -458,7 +458,8 @@ export function VideoPlayer({
         setSelectedStreamIdx(firstDirectIdx);
         currentStream = streams[firstDirectIdx];
       } else {
-        setPlayerMode("embed");
+        setHasFatalError(true);
+        setIsBuffering(false);
         return;
       }
     }
@@ -1203,6 +1204,7 @@ export function VideoPlayer({
               title={`${animeTitle} Episode ${episodeNumber}`}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
+              sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
               className="h-full w-full border-0"
             />
           </div>
