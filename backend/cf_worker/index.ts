@@ -68,9 +68,10 @@ app.get("/proxy_subtitle", async (c) => {
   const url = c.req.query("url");
   if (!url) return c.text("Missing url query param", 400);
 
+  const referer = c.req.query("referer") || null;
   const offset = parseFloat(c.req.query("offset") || "0") || 0;
   const speed = parseFloat(c.req.query("speed") || "1.0") || 1.0;
-  return handleSubtitleProxy(url, offset, speed);
+  return handleSubtitleProxy(url, offset, speed, referer);
 });
 
 // Also support /api/v1/proxy_* aliases
@@ -92,9 +93,10 @@ app.get("/api/v1/proxy_segment", async (c) => {
 app.get("/api/v1/proxy_subtitle", async (c) => {
   const url = c.req.query("url");
   if (!url) return c.text("Missing url query param", 400);
+  const referer = c.req.query("referer") || null;
   const offset = parseFloat(c.req.query("offset") || "0") || 0;
   const speed = parseFloat(c.req.query("speed") || "1.0") || 1.0;
-  return handleSubtitleProxy(url, offset, speed);
+  return handleSubtitleProxy(url, offset, speed, referer);
 });
 
 // Mount modular routers under /api/v1

@@ -279,32 +279,51 @@ export async function handleSegmentProxy(
 export async function handleSubtitleProxy(
   url: string,
   offsetSeconds = 0,
-  speedMultiplier = 1.0
+  speedMultiplier = 1.0,
+  refererParam?: string | null
 ): Promise<Response> {
-  const upstreamRes = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-      Accept: "*/*",
-    },
-  });
-
-  if (!upstreamRes.ok) {
-    return new Response(`Subtitle fetch failed with status ${upstreamRes.status}`, {
-      status: upstreamRes.status,
-      headers: { "Access-Control-Allow-Origin": "*" },
-    });
+  const referer = resolveReferer(url, refererParam);
+  const headers: Record<string, string> = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    Accept: "*/*",
+  };
+  if (referer) {
+    headers["Referer"] = referer;
   }
 
-  const rawSubtitle = await upstreamRes.text();
-  const vtt = convertAssToVtt(rawSubtitle, offsetSeconds, speedMultiplier);
+  try {
+    const upstreamRes = await fetch(url, { headers });
+    if (!upstreamRes.ok) {
+      // Fallback clean WebVTT so player subtitle track does not trigger 403/404 error
+      return new Response("WEBVTT\n\n", {
+        status: 200,
+        headers: {
+          "Content-Type": "text/vtt; charset=utf-8",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "*",
+        },
+      });
+    }
 
-  return new Response(vtt, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/vtt; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "*",
-      "Cache-Control": "public, max-age=86400",
-    },
-  });
+    const rawSubtitle = await upstreamRes.text();
+    const vtt = convertAssToVtt(rawSubtitle, offsetSeconds, speedMultiplier);
+
+    return new Response(vtt, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/vtt; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "*",
+        "Cache-Control": "public, max-age=86400",
+      },
+    });
+  } catch {
+    return new Response("WEBVTT\n\n", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/vtt; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  }
 }
