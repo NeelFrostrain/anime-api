@@ -7,7 +7,9 @@ export const revalidate = 0;
 const BACKEND_URL =
   process.env.BACKEND_URL ||
   process.env.INTERNAL_API_URL?.replace(/\/api\/v1\/?$/, "") ||
-  "http://127.0.0.1:8000";
+  (process.env.NODE_ENV === "production" || process.env.VERCEL
+    ? "https://anime-api.neelofficial0812.workers.dev"
+    : "http://127.0.0.1:8000");
 
 // Proxy non-AniList requests directly to the backend
 async function proxyToBackend(req: NextRequest, slug: string[]) {

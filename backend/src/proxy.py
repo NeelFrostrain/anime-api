@@ -105,8 +105,17 @@ def _resolve_headers_for_url(url: str, referer: str = ""):
     return h, referer
 
 
-@router.get("/proxy_m3u8")
-async def proxy_m3u8(url: str, referer: str = "", audio: str = "sub"):
+@router.api_route("/proxy_m3u8", methods=["GET", "HEAD", "OPTIONS"])
+async def proxy_m3u8(request: Request, url: str = "", referer: str = "", audio: str = "sub"):
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            }
+        )
     url = _norm_url(url)
     if not url:
         return Response(
@@ -227,8 +236,18 @@ async def proxy_m3u8(url: str, referer: str = "", audio: str = "sub"):
         return Response(content=f'{{"detail":"proxy_m3u8 error: {str(e)}"}}', status_code=502, media_type="application/json")
 
 
-@router.api_route("/proxy_segment", methods=["GET", "HEAD"])
-async def proxy_segment(request: Request, url: str, referer: str = "", audio: str = "sub"):
+@router.api_route("/proxy_segment", methods=["GET", "HEAD", "OPTIONS"])
+async def proxy_segment(request: Request, url: str = "", referer: str = "", audio: str = "sub"):
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
+            }
+        )
     url = _norm_url(url)
     if not url:
         return Response(
@@ -388,13 +407,23 @@ def _process_subtitle_content(text: str, offset: float = 0.0, speed: float = 1.0
     return text
 
 
-@router.get("/proxy_subtitle")
+@router.api_route("/proxy_subtitle", methods=["GET", "HEAD", "OPTIONS"])
 async def proxy_subtitle(
-    url: str,
+    request: Request,
+    url: str = "",
     referer: str = "",
     offset: float = Query(0.0, description="time offset in seconds (e.g. +1.5 or -0.5)"),
     speed: float = Query(1.0, ge=0.1, le=5.0, description="timing scale factor"),
 ):
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            }
+        )
     url = _norm_url(url)
     if not url:
         return Response(content='{"detail":"bad subtitle url"}', status_code=400,

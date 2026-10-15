@@ -249,31 +249,12 @@ export function WatchHubClient({
     ? anime.source.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
     : "Original";
 
-  // Proactively check if DUB is available for this anime in background
+  // DUB availability defaults to available unless proven otherwise
   useEffect(() => {
-    let isCancelled = false;
-    async function checkDub() {
-      try {
-        const res = await api.extractEpisode(anime.id, 1, "dub");
-        if (!isCancelled && res && res.streams && res.streams.length > 0) {
-          setDubAvailable(true);
-        }
-      } catch (err: any) {
-        if (!isCancelled) {
-          const msg = err?.message || "";
-          if (msg.toLowerCase().includes("dub") || msg.includes("404")) {
-            setDubAvailable(false);
-          }
-        }
-      }
+    if (dubAvailable === null) {
+      setDubAvailable(true);
     }
-    if (anime.status !== "NOT_YET_RELEASED" && dubAvailable === null && audio !== "dub") {
-      checkDub();
-    }
-    return () => {
-      isCancelled = true;
-    };
-  }, [anime.id, anime.status, dubAvailable, audio]);
+  }, [dubAvailable]);
 
   // Fetch real stream from backend extraction engine
   const fetchStream = useCallback(
@@ -292,8 +273,8 @@ export function WatchHubClient({
         if (aud === "dub") {
           setDubAvailable(true);
         }
-        const hasHls = res?.streams?.some((s: any) => s.type === "hls" || s.isM3U8);
-        if (hasHls) {
+        const hasDirectStream = res?.streams?.some((s: any) => s.type !== "embed");
+        if (hasDirectStream) {
           setPlayerMode("stream");
         } else if (res?.streams && res.streams.length > 0 && res.streams.every((s: any) => s.type === "embed")) {
           setPlayerMode("embed");

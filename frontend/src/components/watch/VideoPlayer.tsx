@@ -254,7 +254,6 @@ export function VideoPlayer({
   // Reset auto-skip, fatal error, and index on episode / stream list change
   useEffect(() => {
     setHasAutoSkipped(false);
-    setSelectedStreamIdx(0);
     setHasFatalError(false);
     setIsBuffering(false);
     userPausedRef.current = false;
@@ -262,7 +261,19 @@ export function VideoPlayer({
     lastPlayTimeRef.current = -1;
     triedStreamsRef.current.clear();
     lastLoadedUrlRef.current = null;
-  }, [episodeNumber, activeAudio, activeProvider]);
+
+    if (streams && streams.length > 0) {
+      const firstDirectIdx = streams.findIndex((s) => s.type !== "embed");
+      if (firstDirectIdx !== -1) {
+        setSelectedStreamIdx(firstDirectIdx);
+        setPlayerMode("stream");
+      } else {
+        setSelectedStreamIdx(0);
+      }
+    } else {
+      setSelectedStreamIdx(0);
+    }
+  }, [episodeNumber, activeAudio, activeProvider, streams]);
 
   // Seamless auto-recovery when a stream fails, 404s, or freezes (only cycles direct streams)
   const handleAutoRecoverStream = useCallback(() => {

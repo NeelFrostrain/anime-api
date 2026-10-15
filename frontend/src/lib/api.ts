@@ -20,7 +20,9 @@ import { anilist } from "./anilist";
 const BACKEND_TARGET =
   process.env.BACKEND_URL ||
   process.env.INTERNAL_API_URL?.replace(/\/api\/v1\/?$/, "") ||
-  "http://127.0.0.1:8000";
+  (process.env.NODE_ENV === "production" || process.env.VERCEL
+    ? "https://anime-api.neelofficial0812.workers.dev"
+    : "http://127.0.0.1:8000");
 
 const API_BASE =
   typeof window === "undefined"
@@ -287,7 +289,7 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  // Native Streaming & Extraction Engine (routed to Cloudflare Worker)
+  // Native Streaming & Extraction Engine
   extractEpisode: (
     animeId: number | string,
     episode = 1,
@@ -296,6 +298,7 @@ export const api = {
   ) =>
     request<StreamExtractionResult>(`/extract/${animeId}`, {
       params: { e: episode, type, provider },
+      cache: "no-store",
       retries: 1,
     }),
 

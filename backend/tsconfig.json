@@ -11,8 +11,8 @@
     "esModuleInterop": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["cf_worker/*", "src/*"]
     }
   },
-  "include": ["src/**/*"]
+  "include": ["cf_worker/**/*", "src/**/*"]
 }

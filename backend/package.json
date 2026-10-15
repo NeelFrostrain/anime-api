@@ -2,7 +2,7 @@
   "name": "anime-api-worker",
   "version": "2.0.0",
   "description": "Kuromi Anime API - Cloudflare Worker with D1 Database & Workers KV",
-  "main": "src/index.ts",
+  "main": "cf_worker/index.ts",
   "type": "module",
   "scripts": {
     "dev": "python api.py",
