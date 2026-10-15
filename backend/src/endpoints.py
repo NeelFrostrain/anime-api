@@ -532,8 +532,10 @@ async def extract_simple(
     wanted = (provider or "").lower().strip() or None
     if wanted in ("auto", "none", "all", ""):
         wanted = None
-    if wanted and wanted not in provider_race.RANKING:
-        raise HTTPException(status_code=422, detail=f"unknown provider '{provider}'. valid: {', '.join(provider_race.RANKING)}")
+    elif wanted in ("vidstreaming", "vidstream"):
+        wanted = "kaa"
+    elif wanted and wanted not in provider_race.RANKING:
+        wanted = None
 
     if query.isdigit():
         anilist_id = int(query)
