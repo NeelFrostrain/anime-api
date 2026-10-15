@@ -4,12 +4,22 @@ import { anilist } from "@/lib/anilist";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const BACKEND_URL =
-  process.env.BACKEND_URL ||
-  process.env.INTERNAL_API_URL?.replace(/\/api\/v1\/?$/, "") ||
-  (process.env.NODE_ENV === "production" || process.env.VERCEL
+function getBackendUrl(): string {
+  const envUrl = process.env.BACKEND_URL || process.env.INTERNAL_API_URL?.replace(/\/api\/v1\/?$/, "");
+  const isVercel = Boolean(process.env.VERCEL || process.env.NEXT_PUBLIC_VERCEL_ENV);
+  // If running on Vercel cloud and BACKEND_URL points to localhost/127.0.0.1, ignore it and use Cloudflare Worker
+  if (isVercel && (!envUrl || envUrl.includes("127.0.0.1") || envUrl.includes("localhost"))) {
+    return "https://anime-api.neelofficial0812.workers.dev";
+  }
+  if (envUrl) {
+    return envUrl;
+  }
+  return process.env.NODE_ENV === "production" || isVercel
     ? "https://anime-api.neelofficial0812.workers.dev"
-    : "http://127.0.0.1:8000");
+    : "http://127.0.0.1:8000";
+}
+
+const BACKEND_URL = getBackendUrl();
 
 // Proxy non-AniList requests directly to the backend
 async function proxyToBackend(req: NextRequest, slug: string[]) {

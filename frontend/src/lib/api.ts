@@ -17,12 +17,16 @@ import { User, WatchlistItem, HistoryItem, UserSettings } from "@/types/user";
 import { anilist } from "./anilist";
 
 // Base API URL
+const isVercelTarget = Boolean(process.env.VERCEL || process.env.NEXT_PUBLIC_VERCEL_ENV);
+const envBackendTarget = process.env.BACKEND_URL || process.env.INTERNAL_API_URL?.replace(/\/api\/v1\/?$/, "");
+
 const BACKEND_TARGET =
-  process.env.BACKEND_URL ||
-  process.env.INTERNAL_API_URL?.replace(/\/api\/v1\/?$/, "") ||
-  (process.env.NODE_ENV === "production" || process.env.VERCEL
+  isVercelTarget && (!envBackendTarget || envBackendTarget.includes("127.0.0.1") || envBackendTarget.includes("localhost"))
     ? "https://anime-api.neelofficial0812.workers.dev"
-    : "http://127.0.0.1:8000");
+    : envBackendTarget ||
+      (process.env.NODE_ENV === "production" || isVercelTarget
+        ? "https://anime-api.neelofficial0812.workers.dev"
+        : "http://127.0.0.1:8000");
 
 const API_BASE =
   typeof window === "undefined"
