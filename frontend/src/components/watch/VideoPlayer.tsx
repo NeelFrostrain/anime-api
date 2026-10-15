@@ -1209,9 +1209,8 @@ export function VideoPlayer({
             <iframe
               src={activeEmbedUrl}
               title={`${animeTitle} Episode ${episodeNumber}`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
               allowFullScreen
-              sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
               className="h-full w-full border-0"
             />
           </div>
