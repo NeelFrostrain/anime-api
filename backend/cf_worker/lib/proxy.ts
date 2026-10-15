@@ -198,12 +198,16 @@ export async function handleM3u8Proxy(
   workerOrigin: string
 ): Promise<Response> {
   const referer = resolveReferer(url, refererParam);
+  const origin = resolveOrigin(referer);
   const headers: Record<string, string> = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
     Accept: "*/*",
   };
   if (referer) {
     headers["Referer"] = referer;
+  }
+  if (origin) {
+    headers["Origin"] = origin;
   }
 
   const upstreamRes = await fetch(url, { headers });
@@ -245,12 +249,16 @@ export async function handleSegmentProxy(
   clientRequest: Request
 ): Promise<Response> {
   const referer = resolveReferer(url, refererParam);
+  const origin = resolveOrigin(referer);
   const headers: Record<string, string> = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
     Accept: "*/*",
   };
   if (referer) {
     headers["Referer"] = referer;
+  }
+  if (origin) {
+    headers["Origin"] = origin;
   }
 
   // Forward Range header if client requested range (for seeking in mp4/ts)
@@ -290,12 +298,16 @@ export async function handleSubtitleProxy(
   refererParam?: string | null
 ): Promise<Response> {
   const referer = resolveReferer(url, refererParam);
+  const origin = resolveOrigin(referer);
   const headers: Record<string, string> = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
     Accept: "*/*",
   };
   if (referer) {
     headers["Referer"] = referer;
+  }
+  if (origin) {
+    headers["Origin"] = origin;
   }
 
   try {

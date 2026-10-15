@@ -269,6 +269,7 @@ export function VideoPlayer({
         setPlayerMode("stream");
       } else {
         setSelectedStreamIdx(0);
+        setPlayerMode("embed");
       }
     } else {
       setSelectedStreamIdx(0);
@@ -458,6 +459,12 @@ export function VideoPlayer({
         setSelectedStreamIdx(firstDirectIdx);
         currentStream = streams[firstDirectIdx];
       } else {
+        if (activeEmbedUrl) {
+          setPlayerMode("embed");
+          setHasFatalError(false);
+          setIsBuffering(false);
+          return;
+        }
         setHasFatalError(true);
         setIsBuffering(false);
         return;

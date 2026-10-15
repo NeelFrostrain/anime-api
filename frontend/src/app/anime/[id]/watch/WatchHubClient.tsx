@@ -276,7 +276,9 @@ export function WatchHubClient({
         const hasDirectStream = res?.streams?.some((s: any) => s.type !== "embed");
         if (hasDirectStream) {
           setPlayerMode("stream");
-        } else if (!res?.streams || res.streams.length === 0) {
+        } else if (res?.streams && res.streams.length > 0) {
+          setPlayerMode("embed");
+        } else {
           setExtractError(`No stream found for Episode ${epNum} on the selected server. Please select another server.`);
         }
       } catch (err: any) {
@@ -300,6 +302,14 @@ export function WatchHubClient({
     },
     [anime.id]
   );
+
+  const handleTryNextServer = () => {
+    const currentIndex = EXTRACTION_PROVIDERS.findIndex((p) => p.id === provider);
+    const nextIndex = (currentIndex + 1) % EXTRACTION_PROVIDERS.length;
+    const nextProv = EXTRACTION_PROVIDERS[nextIndex].id;
+    setProvider(nextProv);
+    fetchStream(currentEpNum, audio, nextProv);
+  };
 
   const isInitialMount = React.useRef(true);
 
@@ -459,14 +469,33 @@ export function WatchHubClient({
               </div>
             )}
 
-            {/* Error Banner with Retry */}
+            {/* Error Banner with Retry & Server Switch */}
             {extractError && (
-              <div className="flex items-center justify-between gap-3 rounded-md border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-300">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-md border border-rose-500/30 bg-rose-500/10 p-3.5 sm:p-4 text-xs text-rose-300">
                 <div className="flex items-center gap-2.5">
                   <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
                   <span>{extractError}</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={handleTryNextServer}
+                    className="flex items-center gap-1.5 rounded-md bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-2.5 py-1 font-bold text-amber-300 transition-colors"
+                  >
+                    <Server className="h-3 w-3" />
+                    <span>Try Next Server</span>
+                  </button>
+                  {hasEmbed && (
+                    <button
+                      onClick={() => {
+                        setPlayerMode("embed");
+                        setExtractError(null);
+                      }}
+                      className="flex items-center gap-1.5 rounded-md bg-[var(--accent)] hover:brightness-110 px-2.5 py-1 font-bold text-white transition-all shadow-sm"
+                    >
+                      <Layers className="h-3 w-3" />
+                      <span>Watch via Embed</span>
+                    </button>
+                  )}
                   {audio === "dub" ? (
                     <button
                       onClick={() => setAudio("sub")}
