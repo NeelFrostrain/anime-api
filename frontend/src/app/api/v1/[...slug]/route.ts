@@ -7,9 +7,9 @@ export const revalidate = 0;
 const BACKEND_URL =
   process.env.BACKEND_URL ||
   process.env.INTERNAL_API_URL?.replace(/\/api\/v1\/?$/, "") ||
-  "https://anime-api.neelofficial0812.workers.dev";
+  "http://127.0.0.1:8000";
 
-// Proxy non-AniList requests directly to the backend (Cloudflare Worker or local)
+// Proxy non-AniList requests directly to the backend
 async function proxyToBackend(req: NextRequest, slug: string[]) {
   const targetUrl = new URL(
     `/api/v1/${slug.join("/")}${req.nextUrl.search}`,
@@ -51,7 +51,7 @@ async function proxyToBackend(req: NextRequest, slug: string[]) {
       });
     }
 
-    // For non-JSON (e.g. text or proxy streams), stream cleanly
+    // For non-JSON (e.g. m3u8 playlists or binary video segments), forward binary buffer cleanly
     const resHeaders = new Headers();
     backendRes.headers.forEach((value, key) => {
       const lower = key.toLowerCase();
@@ -60,7 +60,7 @@ async function proxyToBackend(req: NextRequest, slug: string[]) {
       }
     });
 
-    const body = await backendRes.text();
+    const body = await backendRes.arrayBuffer();
     return new NextResponse(body, {
       status: backendRes.status,
       statusText: backendRes.statusText,

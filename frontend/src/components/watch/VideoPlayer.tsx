@@ -264,52 +264,35 @@ export function VideoPlayer({
     lastLoadedUrlRef.current = null;
   }, [episodeNumber, activeAudio, activeProvider]);
 
-  // Seamless auto-recovery when a stream fails, 404s, 500s or hangs (without infinite loops)
+  // Seamless auto-recovery when a stream fails, 404s, or freezes (only cycles direct streams)
   const handleAutoRecoverStream = useCallback(() => {
     triedStreamsRef.current.add(selectedStreamIdx);
 
-    // 1. Advance to next untried stream in list if available
+    // 1. Advance to next untried DIRECT HLS stream if available
     if (streams && streams.length > 0) {
-      const nextIdx = streams.findIndex((_, idx) => idx > selectedStreamIdx && !triedStreamsRef.current.has(idx));
+      const nextIdx = streams.findIndex(
+        (s, idx) => idx > selectedStreamIdx && s.type !== "embed" && !triedStreamsRef.current.has(idx)
+      );
       if (nextIdx !== -1) {
-        const nextStream = streams[nextIdx];
-        console.log(`[VideoPlayer] Stream index ${selectedStreamIdx} stalled/failed, auto-advancing to stream ${nextIdx}`);
+        console.log(`[VideoPlayer] Direct stream ${selectedStreamIdx} failed, auto-advancing to direct stream ${nextIdx}`);
         setSelectedStreamIdx(nextIdx);
         setHasFatalError(false);
         setIsBuffering(true);
         userPausedRef.current = false;
         stallCountRef.current = 0;
         lastPlayTimeRef.current = -1;
-        if (nextStream?.type === "embed") {
-          setPlayerMode("embed");
-        }
         return;
       }
     }
 
-    // 2. If direct streams failed, auto-switch to Embed mode if available
-    const fallbackEmbed =
-      activeStream?.embed ||
-      (activeStream?.type === "embed" ? activeStream.url : null) ||
-      streams.find((s) => s.embed)?.embed ||
-      streams.find((s) => s.type === "embed")?.url;
-
-    if (fallbackEmbed && playerMode !== "embed") {
-      console.log("[VideoPlayer] Direct streams failed, auto-falling back to Embed player");
-      setPlayerMode("embed");
-      setHasFatalError(false);
-      setIsBuffering(false);
-      userPausedRef.current = false;
-      return;
-    }
-
-    // 3. Otherwise stop buffering and show recovery overlay with one-click actions
-    console.warn("[VideoPlayer] All available streams for current provider failed or stalled.");
+    // 2. If all direct streams exhausted, do NOT silently force switch to embed.
+    // Instead show the recovery overlay so user can retry, pick next provider, or choose embed.
+    console.warn("[VideoPlayer] Direct stream playback stalled. Showing recovery overlay.");
     setHasFatalError(true);
     setIsBuffering(false);
-  }, [streams, selectedStreamIdx, activeStream, playerMode]);
+  }, [streams, selectedStreamIdx]);
 
-  // Active Playback Monitor & Auto-Recovery Ticker: checks every 1000ms
+  // Active Playback Monitor & Stall Detector
   useEffect(() => {
     if (playerMode !== "stream" || isLoadingStreams || !streams || streams.length === 0) {
       stallCountRef.current = 0;
@@ -321,25 +304,21 @@ export function VideoPlayer({
       const video = videoRef.current;
       if (!video) return;
 
-      // Watchdog for initial buffering stall (when video hasn't started playing or is loading)
-      if (isBuffering && !isLoadingStreams && !hasFatalError) {
-        stallCountRef.current += 1;
-        if (stallCountRef.current >= 8) {
-          console.warn(`[VideoPlayer] Stream index ${selectedStreamIdx} buffering stalled for 8s (currentTime=${video.currentTime.toFixed(2)}, readyState=${video.readyState}), auto-adjusting to next stream...`);
-          stallCountRef.current = 0;
-          lastPlayTimeRef.current = -1;
-          handleAutoRecoverStream();
-          return;
-        }
-      } else if (!userPausedRef.current && !video.paused && isPlaying) {
+      // If video has loaded enough data to play, clear buffering state
+      if (video.readyState >= 3 && isBuffering) {
+        setIsBuffering(false);
+      }
+
+      // Only check stall if actively playing and unpaused
+      if (!userPausedRef.current && !video.paused && isPlaying) {
         const current = video.currentTime;
         const isProgressing = lastPlayTimeRef.current >= 0 && current > lastPlayTimeRef.current;
         lastPlayTimeRef.current = current;
 
         if (!isProgressing || video.readyState < 2) {
           stallCountRef.current += 1;
-          if (stallCountRef.current >= 8) {
-            console.warn(`[VideoPlayer] Stream index ${selectedStreamIdx} playback stalled for 8s (time=${current.toFixed(2)}, readyState=${video.readyState}), auto-adjusting to next stream...`);
+          if (stallCountRef.current >= 15) {
+            console.warn(`[VideoPlayer] Stream ${selectedStreamIdx} stalled for 15s during playback, attempting recovery...`);
             stallCountRef.current = 0;
             lastPlayTimeRef.current = -1;
             handleAutoRecoverStream();
@@ -461,10 +440,16 @@ export function VideoPlayer({
     const video = videoRef.current;
     if (!video) return;
 
-    const currentStream = streams[selectedStreamIdx] || streams[0];
-    if (currentStream?.type === "embed" && currentStream?.url) {
-      setPlayerMode("embed");
-      return;
+    let currentStream = streams[selectedStreamIdx];
+    if (!currentStream || currentStream.type === "embed") {
+      const firstDirectIdx = streams.findIndex((s) => s.type !== "embed");
+      if (firstDirectIdx !== -1) {
+        setSelectedStreamIdx(firstDirectIdx);
+        currentStream = streams[firstDirectIdx];
+      } else {
+        setPlayerMode("embed");
+        return;
+      }
     }
 
     const playableUrl = getPlayableStreamUrl(currentStream);

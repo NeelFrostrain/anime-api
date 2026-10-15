@@ -20,7 +20,7 @@ import { anilist } from "./anilist";
 const BACKEND_TARGET =
   process.env.BACKEND_URL ||
   process.env.INTERNAL_API_URL?.replace(/\/api\/v1\/?$/, "") ||
-  "https://anime-api.neelofficial0812.workers.dev";
+  "http://127.0.0.1:8000";
 
 const API_BASE =
   typeof window === "undefined"

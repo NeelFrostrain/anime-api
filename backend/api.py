@@ -1,16 +1,15 @@
-"""
-Kuromi Backend has been migrated to Cloudflare Workers!
-Please run:
-    npm run dev
-to start the Cloudflare Worker server on port 8000.
-
-The legacy Python code is archived in ./legacy_python/
-"""
 import sys
+from pathlib import Path
+
+# Ensure both backend and project root are in sys.path
+backend_dir = Path(__file__).resolve().parent
+project_root = backend_dir.parent
+for p in (str(backend_dir), str(project_root)):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+from app.main import app
 
 if __name__ == "__main__":
-    print("=====================================================================")
-    print("  Kuromi Backend has been converted to a native Cloudflare Worker!  ")
-    print("  Run 'npm run dev' in backend/ to start the Worker on port 8000.  ")
-    print("=====================================================================")
-    sys.exit(0)
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
