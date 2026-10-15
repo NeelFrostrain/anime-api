@@ -10,6 +10,7 @@ function resolveReferer(url: string, explicitReferer?: string | null): string {
     lower.includes("advancedairesearchlab") ||
     lower.includes("habibikun") ||
     lower.includes("babybayw") ||
+    lower.includes("narutokun") ||
     lower.includes("krussdomi")
   ) {
     return "https://krussdomi.com/";
@@ -283,7 +284,11 @@ export async function handleSegmentProxy(
   const contentRange = upstreamRes.headers.get("Content-Range");
   if (contentRange) responseHeaders.set("Content-Range", contentRange);
 
-  responseHeaders.set("Cache-Control", "public, max-age=86400, immutable");
+  if (!upstreamRes.ok) {
+    responseHeaders.set("Cache-Control", "no-store, no-cache, must-revalidate");
+  } else {
+    responseHeaders.set("Cache-Control", "public, max-age=86400, immutable");
+  }
 
   return new Response(upstreamRes.body, {
     status: upstreamRes.status,
