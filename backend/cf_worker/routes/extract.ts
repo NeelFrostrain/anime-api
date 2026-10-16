@@ -21,8 +21,9 @@ extractRoutes.get("/extract/:query", async (c) => {
   const episode = parseInt(c.req.query("e") || c.req.query("episode") || "1", 10);
   const audio = (c.req.query("type") || c.req.query("audio") || "sub").toLowerCase() as "sub" | "dub";
   const provider = c.req.query("provider") || null;
+  const passedTitle = c.req.query("title") || c.req.query("q") || null;
 
-  const result = await extractStreamSources(query, episode, audio, provider, c.env.KV);
+  const result = await extractStreamSources(query, episode, audio, provider, c.env.KV, passedTitle);
   return c.json(result);
 });
 

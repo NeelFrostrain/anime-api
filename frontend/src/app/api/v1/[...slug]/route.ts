@@ -6,15 +6,21 @@ export const revalidate = 0;
 
 function getBackendUrl(): string {
   const envUrl = process.env.BACKEND_URL || process.env.INTERNAL_API_URL?.replace(/\/api\/v1\/?$/, "");
-  const isVercel = Boolean(process.env.VERCEL || process.env.NEXT_PUBLIC_VERCEL_ENV);
-  // If running on Vercel cloud and BACKEND_URL points to localhost/127.0.0.1, ignore it and use Cloudflare Worker
-  if (isVercel && (!envUrl || envUrl.includes("127.0.0.1") || envUrl.includes("localhost"))) {
+  const isCloud = Boolean(
+    process.env.VERCEL ||
+    process.env.NEXT_PUBLIC_VERCEL_ENV ||
+    process.env.NETLIFY ||
+    process.env.DEPLOY_PRIME_URL ||
+    process.env.NODE_ENV === "production"
+  );
+  // If running on cloud and BACKEND_URL points to localhost/127.0.0.1, ignore it and use Cloudflare Worker
+  if (isCloud && (!envUrl || envUrl.includes("127.0.0.1") || envUrl.includes("localhost"))) {
     return "https://anime-api.neelofficial0812.workers.dev";
   }
   if (envUrl) {
     return envUrl;
   }
-  return process.env.NODE_ENV === "production" || isVercel
+  return isCloud
     ? "https://anime-api.neelofficial0812.workers.dev"
     : "http://127.0.0.1:8000";
 }

@@ -17,14 +17,19 @@ import { User, WatchlistItem, HistoryItem, UserSettings } from "@/types/user";
 import { anilist } from "./anilist";
 
 // Base API URL
-const isVercelTarget = Boolean(process.env.VERCEL || process.env.NEXT_PUBLIC_VERCEL_ENV);
+const isCloudTarget = Boolean(
+  process.env.VERCEL ||
+  process.env.NEXT_PUBLIC_VERCEL_ENV ||
+  process.env.NETLIFY ||
+  process.env.DEPLOY_PRIME_URL
+);
 const envBackendTarget = process.env.BACKEND_URL || process.env.INTERNAL_API_URL?.replace(/\/api\/v1\/?$/, "");
 
 const BACKEND_TARGET =
-  isVercelTarget && (!envBackendTarget || envBackendTarget.includes("127.0.0.1") || envBackendTarget.includes("localhost"))
+  isCloudTarget && (!envBackendTarget || envBackendTarget.includes("127.0.0.1") || envBackendTarget.includes("localhost"))
     ? "https://anime-api.neelofficial0812.workers.dev"
     : envBackendTarget ||
-      (process.env.NODE_ENV === "production" || isVercelTarget
+      (process.env.NODE_ENV === "production" || isCloudTarget
         ? "https://anime-api.neelofficial0812.workers.dev"
         : "http://127.0.0.1:8000");
 
@@ -298,10 +303,11 @@ export const api = {
     animeId: number | string,
     episode = 1,
     type: "sub" | "dub" = "sub",
-    provider?: string
+    provider?: string,
+    title?: string
   ) =>
     request<StreamExtractionResult>(`/extract/${animeId}`, {
-      params: { e: episode, type, provider },
+      params: { e: episode, type, provider, title },
       cache: "no-store",
       retries: 1,
     }),

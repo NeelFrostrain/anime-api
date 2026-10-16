@@ -52,7 +52,7 @@ export function buildSearchQueries(titles: string[]): string[] {
     if (clean.length < 3) return;
     if (!/[a-zA-Z]/.test(clean)) return;
     if (/^(season|part|cour|episode)\s*\d+$/i.test(clean)) return;
-    if (/^\d+(st|nd|rd|th)?(\s+season)?$/i.test(clean)) return;
+    if (/^\d+(?:st|nd|rd|th)?(?:\s+(?:season|stage|cour|part))?$/i.test(clean)) return;
     const lower = clean.toLowerCase();
     if (!seen.has(lower)) {
       seen.add(lower);
@@ -97,17 +97,43 @@ export function buildSearchQueries(titles: string[]): string[] {
   return queries;
 }
 
-// Fetch candidate titles for an anime using AniList GraphQL and AniZip mappings
-export async function fetchShowTitles(anilistId: number, kv?: KVNamespace): Promise<string[]> {
-  const cacheKey = `titles:v2:${anilistId}`;
+export async function fetchShowTitles(
+  anilistId: number,
+  kv?: KVNamespace,
+  passedTitle?: string | null
+): Promise<string[]> {
+  const cacheKey = `titles:v4:${anilistId}`;
   if (kv) {
     try {
       const cached = await kv.get(cacheKey, "json");
-      if (Array.isArray(cached) && cached.length > 0) return cached as string[];
+      if (Array.isArray(cached) && cached.length > 0) {
+        if (!passedTitle || cached.some((c) => c.toLowerCase().includes(passedTitle.slice(0, 5).toLowerCase()))) {
+          return cached as string[];
+        }
+      }
     } catch {}
   }
 
   const titlesSet = new Set<string>();
+
+  if (passedTitle && passedTitle.trim()) {
+    const pt = passedTitle.trim();
+    // Prioritize clean specific identifiers first
+    const sbrMatch = pt.match(/Steel\s*Ball\s*Run/i)?.[0];
+    if (sbrMatch) titlesSet.add("Steel Ball Run");
+
+    const cleaned = pt
+      .replace(/\b\d+(?:st|nd|rd|th)?\s*[-–]\s*\d+(?:st|nd|rd|th)?\s*STAGE\b/gi, "")
+      .replace(/\b\d+(?:st|nd|rd|th)?\s*STAGE\b/gi, "")
+      .replace(/\b(?:part|season|cour)\s*\d+\b/gi, "")
+      .trim();
+    if (cleaned && cleaned !== pt && cleaned.length >= 3) titlesSet.add(cleaned);
+
+    const colonPart = pt.split(/[:–-]/)[0]?.trim();
+    if (colonPart && colonPart.length >= 3) titlesSet.add(colonPart);
+
+    titlesSet.add(pt);
+  }
 
   // Parallel fetch: AniList GraphQL (canonical) and AniZip (multilingual mappings)
   await Promise.allSettled([
@@ -173,20 +199,21 @@ export async function extractKaaStreams(
   anilistId: number,
   episode: number,
   audio: "sub" | "dub" = "sub",
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  passedTitle?: string | null
 ): Promise<{ streams: any[]; subtitles: any[] } | null> {
-  const titles = await fetchShowTitles(anilistId, kv);
+  const titles = await fetchShowTitles(anilistId, kv, passedTitle);
   if (!titles || titles.length === 0) return null;
 
   const cleanQueries = buildSearchQueries(titles);
   if (cleanQueries.length === 0) return null;
 
-  // Search Kaa with queries in parallel (first 3 queries)
+  // Search Kaa with queries in parallel (first 5 queries)
   const candidates: any[] = [];
   const seenSlugs = new Set<string>();
 
   await Promise.allSettled(
-    cleanQueries.slice(0, 3).map(async (q) => {
+    cleanQueries.slice(0, 5).map(async (q) => {
       try {
         const sRes = await fetch("https://kaa.lt/api/fsearch", {
           method: "POST",
@@ -528,17 +555,21 @@ export async function extractStreamSources(
   episode = 1,
   audio: "sub" | "dub" = "sub",
   provider?: string | null,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  passedTitle?: string | null
 ): Promise<any> {
   const anilistId = Number(query);
   const targetCategory = audio === "dub" ? "dub" : "sub";
   const targetProvider = provider || "auto";
-  const cacheKey = `stream:v7:${anilistId}:${episode}:${targetCategory}:${targetProvider}`;
+  const cacheKey = `stream:v10:${anilistId}:${episode}:${targetCategory}:${targetProvider}`;
 
   if (kv) {
     try {
       const cached = await kv.get(cacheKey, "json");
-      if (cached && (cached as any).streams && (cached as any).streams.length > 0) return cached;
+      if (cached && (cached as any).streams && (cached as any).streams.length > 0) {
+        const hasDirect = (cached as any).streams.some((s: any) => s.type !== "embed");
+        if (hasDirect || !passedTitle) return cached;
+      }
     } catch {}
   }
 
@@ -552,14 +583,14 @@ export async function extractStreamSources(
     } catch {}
     if (!reanimeData || reanimeData.streams.length === 0) {
       try {
-        const kRes = await extractKaaStreams(anilistId, episode, targetCategory, kv);
+        const kRes = await extractKaaStreams(anilistId, episode, targetCategory, kv, passedTitle);
         if (kRes?.streams?.length) directStreams = kRes.streams;
         if (kRes?.subtitles?.length) kaaSubtitles = kRes.subtitles;
       } catch {}
     }
   } else if (targetProvider === "kaa" || targetProvider === "vidstreaming") {
     try {
-      const kRes = await extractKaaStreams(anilistId, episode, targetCategory, kv);
+      const kRes = await extractKaaStreams(anilistId, episode, targetCategory, kv, passedTitle);
       if (kRes?.streams?.length) directStreams = kRes.streams;
       if (kRes?.subtitles?.length) kaaSubtitles = kRes.subtitles;
     } catch {}
@@ -571,7 +602,7 @@ export async function extractStreamSources(
   } else {
     // Parallel fetch high-performance HLS (Kaa) and Clean Multi-Source (Reanime / Flixcloud)
     const [kaaRes, reanimeRes] = await Promise.allSettled([
-      extractKaaStreams(anilistId, episode, targetCategory, kv),
+      extractKaaStreams(anilistId, episode, targetCategory, kv, passedTitle),
       extractReanimeStreams(anilistId, episode, targetCategory),
     ]);
 
@@ -654,9 +685,11 @@ export async function extractStreamSources(
   };
 
   // Only cache positive results in KV so transient network glitches are not locked in
+  const hasDirectStream = directStreams && directStreams.length > 0;
   if (kv && allStreams.length > 0) {
     try {
-      await kv.put(cacheKey, JSON.stringify(result), { expirationTtl: 1800 });
+      const ttl = hasDirectStream ? 3600 : 30;
+      await kv.put(cacheKey, JSON.stringify(result), { expirationTtl: ttl });
     } catch {}
   }
 

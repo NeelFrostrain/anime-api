@@ -1,13 +1,19 @@
 import type { NextConfig } from "next";
 
-const isVercel = Boolean(process.env.VERCEL || process.env.NEXT_PUBLIC_VERCEL_ENV);
+const isCloud = Boolean(
+  process.env.VERCEL ||
+  process.env.NEXT_PUBLIC_VERCEL_ENV ||
+  process.env.NETLIFY ||
+  process.env.DEPLOY_PRIME_URL ||
+  process.env.NODE_ENV === "production"
+);
 const envBackendUrl = process.env.BACKEND_URL;
 
 const BACKEND_URL =
-  isVercel && (!envBackendUrl || envBackendUrl.includes("127.0.0.1") || envBackendUrl.includes("localhost"))
+  (isCloud && (!envBackendUrl || envBackendUrl.includes("127.0.0.1") || envBackendUrl.includes("localhost")))
     ? "https://anime-api.neelofficial0812.workers.dev"
     : envBackendUrl ||
-      (process.env.NODE_ENV === "production" || isVercel
+      (isCloud
         ? "https://anime-api.neelofficial0812.workers.dev"
         : "http://127.0.0.1:8000");
 

@@ -262,11 +262,13 @@ export function WatchHubClient({
       setIsExtracting(true);
       setExtractError(null);
       try {
+        const queryTitle = anime.title?.english || anime.title?.romaji || title;
         const res = await api.extractEpisode(
           anime.id,
           epNum,
           aud,
-          prov === "auto" ? undefined : prov
+          prov === "auto" ? undefined : prov,
+          queryTitle
         );
         setStreamResult(res);
         if (aud === "dub") {
