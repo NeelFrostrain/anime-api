@@ -1225,8 +1225,6 @@ export function VideoPlayer({
               title={`${animeTitle} Episode ${episodeNumber}`}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
               allowFullScreen
-              sandbox="allow-same-origin allow-scripts allow-forms allow-presentation"
-              referrerPolicy="no-referrer"
               className="h-full w-full border-0"
             />
           </div>
