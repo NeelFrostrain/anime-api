@@ -278,7 +278,13 @@ export async function handleSegmentProxy(
     headers["Range"] = rangeHeader;
   }
 
-  const upstreamRes = await fetch(url, { headers });
+  let upstreamRes = await fetch(url, { headers });
+  if (!upstreamRes.ok && (upstreamRes.status === 429 || upstreamRes.status === 503)) {
+    const retryAfter = parseInt(upstreamRes.headers.get("Retry-After") || "1", 10);
+    const delay = Math.min(Math.max(retryAfter * 1000, 600), 2500);
+    await new Promise((r) => setTimeout(r, delay));
+    upstreamRes = await fetch(url, { headers });
+  }
 
   const responseHeaders = new Headers();
   responseHeaders.set("Access-Control-Allow-Origin", "*");

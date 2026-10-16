@@ -683,11 +683,21 @@ query GetRandomAnime($page: Int = 1) {
 }
 `;
 
+// In-memory query cache for AniList requests to avoid hitting AniList's rate limits
+const anilistMemoryCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL_MS = 60 * 1000; // 1 minute in-memory cache
+
 // Direct AniList Fetcher running in Node.js (SSR) or browser
 export async function queryAniListDirect<T = any>(
   query: string,
   variables: Record<string, any> = {}
 ): Promise<T> {
+  const cacheKey = JSON.stringify({ query, variables });
+  const cached = anilistMemoryCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data as T;
+  }
+
   const isServer = typeof window === "undefined";
   const fetchConfig: RequestInit = {
     method: "POST",
@@ -699,15 +709,42 @@ export async function queryAniListDirect<T = any>(
     ...(isServer ? { next: { revalidate: 300 } as any } : {}),
   };
 
-  const response = await fetch(ANILIST_URL, fetchConfig);
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`AniList error ${response.status}: ${errText}`);
+  let response: Response | null = null;
+  const retries = 2;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      response = await fetch(ANILIST_URL, fetchConfig);
+      if (response.status === 429 && attempt < retries) {
+        const retryAfter = parseInt(response.headers.get("Retry-After") || "2", 10);
+        const delay = Math.min(Math.max(retryAfter * 1000, 1500), 5000);
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      break;
+    } catch (e) {
+      if (attempt === retries) throw e;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+
+  if (!response || !response.ok) {
+    const status = response?.status || 500;
+    const errText = response ? await response.text() : "Network error";
+    throw new Error(`AniList error ${status}: ${errText}`);
   }
 
   const result = (await response.json()) as { data?: T; errors?: any[] };
   if (result.errors && (!result.data || Object.keys(result.data).length === 0)) {
     throw new Error(`AniList GraphQL Error: ${result.errors[0]?.message || "Unknown error"}`);
+  }
+
+  if (result.data) {
+    anilistMemoryCache.set(cacheKey, { data: result.data, timestamp: Date.now() });
+    if (anilistMemoryCache.size > 200) {
+      const firstKey = anilistMemoryCache.keys().next().value;
+      if (firstKey) anilistMemoryCache.delete(firstKey);
+    }
   }
 
   return result.data as T;

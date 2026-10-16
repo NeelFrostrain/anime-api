@@ -518,11 +518,14 @@ export function VideoPlayer({
         maxMaxBufferLength: 60,
         maxBufferSize: 60 * 1000 * 1000,
         maxBufferHole: 0.5,
-        fragLoadingTimeOut: 15000,
-        fragLoadingMaxRetry: 3,
-        fragLoadingRetryDelay: 500,
-        manifestLoadingTimeOut: 15000,
-        levelLoadingTimeOut: 15000,
+        fragLoadingTimeOut: 20000,
+        fragLoadingMaxRetry: 6,
+        fragLoadingRetryDelay: 1000,
+        fragLoadingMaxRetryTimeout: 64000,
+        manifestLoadingTimeOut: 20000,
+        manifestLoadingMaxRetry: 5,
+        manifestLoadingRetryDelay: 1000,
+        levelLoadingTimeOut: 20000,
       });
       hlsRef.current = hls;
 
