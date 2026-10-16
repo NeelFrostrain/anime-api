@@ -212,7 +212,10 @@ export function VideoPlayer({
 
   // Attempt reliable autoplay with muted fallback if browser blocks unmuted playback
   const attemptAutoplay = useCallback((videoEl: HTMLVideoElement) => {
-    if (!autoPlay) return;
+    if (!autoPlay) {
+      setIsBuffering(false);
+      return;
+    }
     const playPromise = videoEl.play();
     if (playPromise !== undefined) {
       playPromise
@@ -222,12 +225,8 @@ export function VideoPlayer({
           setHasFatalError(false);
         })
         .catch((err) => {
-          // AbortError is triggered when a new load request interrupts play. It is benign.
-          if (err?.name === "AbortError") {
-            return;
-          }
-          // Only attempt muted autoplay if blocked by browser policy (NotAllowedError)
-          if (err?.name === "NotAllowedError") {
+          // If browser policy blocked unmuted autoplay, attempt muted autoplay
+          if (err?.name === "NotAllowedError" || err?.name === "SecurityError") {
             videoEl.muted = true;
             setIsMuted(true);
             videoEl
@@ -244,10 +243,25 @@ export function VideoPlayer({
                 setIsPlaying(false);
                 setIsBuffering(false);
               });
+          } else {
+            setIsPlaying(false);
+            setIsBuffering(false);
           }
         });
+    } else {
+      setIsBuffering(false);
     }
   }, [autoPlay]);
+
+  // Safety watchdog: clear isBuffering after 4 seconds so the player is NEVER stuck
+  useEffect(() => {
+    if (isBuffering) {
+      const timer = setTimeout(() => {
+        setIsBuffering(false);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [isBuffering]);
 
   const triedStreamsRef = useRef<Set<number>>(new Set());
 
@@ -537,6 +551,8 @@ export function VideoPlayer({
         setLevels(["Auto", ...qualityLevels]);
         if (autoPlay && !userPausedRef.current) {
           attemptAutoplay(video);
+        } else {
+          setIsBuffering(false);
         }
       });
 
@@ -1128,8 +1144,8 @@ export function VideoPlayer({
           </div>
         )}
 
-        {/* Buffering Indicator - Subtle non-blocking spinner (stream mode only) */}
-        {playerMode === "stream" && isBuffering && !isLoadingStreams && !hasFatalError && (
+        {/* Buffering Indicator - Subtle non-blocking spinner (stream mode only when actively playing) */}
+        {playerMode === "stream" && isBuffering && isPlaying && !isLoadingStreams && !hasFatalError && (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/30 backdrop-blur-[1px] pointer-events-none transition-opacity duration-200">
             <div className="h-10 w-10 rounded-full border-2 border-white/20 border-t-[var(--accent)] animate-spin" />
             <span className="mt-2.5 text-[11px] font-semibold text-zinc-300">
@@ -1359,14 +1375,15 @@ export function VideoPlayer({
                 </div>
               )}
 
-              {/* Big Center Play Button - ONLY when user intentionally paused */}
-              {userPausedRef.current && !isPlaying && !isLoadingStreams && !isBuffering && !hasFatalError && (
+              {/* Big Center Play Button - Shown whenever video is not playing and stream is ready */}
+              {!isPlaying && !isLoadingStreams && !hasFatalError && (
                 <button
+                  type="button"
                   onClick={togglePlay}
-                  className="absolute inset-0 m-auto flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)] text-white transition-transform hover:scale-110 active:scale-95 shadow-lg z-20 cursor-pointer"
+                  className="absolute inset-0 m-auto flex h-16 w-16 items-center justify-center rounded-full bg-[var(--accent)] hover:brightness-110 text-white transition-all transform hover:scale-110 active:scale-95 shadow-2xl z-30 cursor-pointer pointer-events-auto"
                   aria-label="Play video"
                 >
-                  <Play className="h-6 w-6 fill-white ml-0.5" />
+                  <Play className="h-7 w-7 fill-white ml-1 text-white" />
                 </button>
               )}
 
