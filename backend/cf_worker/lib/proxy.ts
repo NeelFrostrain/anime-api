@@ -201,8 +201,13 @@ export async function handleM3u8Proxy(
   const referer = resolveReferer(url, refererParam);
   const origin = resolveOrigin(referer);
   const headers: Record<string, string> = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
     Accept: "*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "cross-site",
   };
   if (referer) {
     headers["Referer"] = referer;
@@ -211,7 +216,12 @@ export async function handleM3u8Proxy(
     headers["Origin"] = origin;
   }
 
-  const upstreamRes = await fetch(url, { headers });
+  let upstreamRes = await fetch(url, { headers });
+  if (!upstreamRes.ok && (upstreamRes.status === 429 || upstreamRes.status === 503)) {
+    await new Promise((r) => setTimeout(r, 600));
+    upstreamRes = await fetch(url, { headers });
+  }
+
   if (!upstreamRes.ok) {
     return new Response(`Upstream manifest failed with status ${upstreamRes.status}`, {
       status: upstreamRes.status,

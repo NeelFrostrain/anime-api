@@ -297,8 +297,17 @@ export function VideoPlayer({
       }
     }
 
-    // 2. If all direct streams exhausted, do NOT silently force switch to embed.
-    // Instead show the recovery overlay so user can retry, pick next provider, or choose embed.
+    // 2. If all direct streams fail, seamlessly auto-switch to embed stream so video continues playing
+    const embedIdx = streams.findIndex((s) => s.type === "embed" || Boolean(s.embed));
+    if (embedIdx !== -1) {
+      console.log(`[VideoPlayer] Direct streams failed, auto-switching to embed ${embedIdx}`);
+      setSelectedStreamIdx(embedIdx);
+      setPlayerMode("embed");
+      setHasFatalError(false);
+      setIsBuffering(false);
+      return;
+    }
+
     console.warn("[VideoPlayer] Direct stream playback stalled. Showing recovery overlay.");
     setHasFatalError(true);
     setIsBuffering(false);

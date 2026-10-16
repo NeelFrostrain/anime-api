@@ -181,35 +181,38 @@ export async function extractKaaStreams(
   const cleanQueries = buildSearchQueries(titles);
   if (cleanQueries.length === 0) return null;
 
-  // Search Kaa with queries (first 5 queries)
+  // Search Kaa with queries in parallel (first 3 queries)
   const candidates: any[] = [];
   const seenSlugs = new Set<string>();
 
-  for (const q of cleanQueries.slice(0, 5)) {
-    try {
-      const sRes = await fetch("https://kaa.lt/api/fsearch", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-        },
-        body: JSON.stringify({ page: 1, query: q }),
-        signal: AbortSignal.timeout(3000),
-      });
-      if (sRes.ok) {
-        const sData = (await sRes.json()) as any;
-        if (Array.isArray(sData.result)) {
-          for (const item of sData.result) {
-            if (item?.slug && !seenSlugs.has(item.slug)) {
-              seenSlugs.add(item.slug);
-              candidates.push(item);
+  await Promise.allSettled(
+    cleanQueries.slice(0, 3).map(async (q) => {
+      try {
+        const sRes = await fetch("https://kaa.lt/api/fsearch", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+          },
+          body: JSON.stringify({ page: 1, query: q }),
+          signal: AbortSignal.timeout(3000),
+        });
+        if (sRes.ok) {
+          const sData = (await sRes.json()) as any;
+          if (Array.isArray(sData.result)) {
+            for (const item of sData.result) {
+              if (item?.slug && !seenSlugs.has(item.slug)) {
+                seenSlugs.add(item.slug);
+                candidates.push(item);
+              }
             }
           }
         }
-      }
-    } catch {}
-  }
+      } catch {}
+    })
+  );
 
   if (candidates.length === 0) return null;
 
@@ -589,6 +592,32 @@ export async function extractStreamSources(
     allStreams.push(...reanimeData.streams);
   }
 
+  // Safe fallback embeds so the player is NEVER completely blank for any anime
+  if (allStreams.length === 0) {
+    allStreams.push(
+      {
+        url: `https://vidsrc.su/embed/anime/${anilistId}/${episode}`,
+        quality: "auto",
+        isM3U8: false,
+        server: "VidSrc (Backup)",
+        type: "embed",
+        audio: targetCategory,
+        embed: `https://vidsrc.su/embed/anime/${anilistId}/${episode}`,
+        subtitles: [],
+      },
+      {
+        url: `https://autoembed.cc/embed/player.php?id=${anilistId}&s=${episode}`,
+        quality: "auto",
+        isM3U8: false,
+        server: "AutoEmbed (Backup)",
+        type: "embed",
+        audio: targetCategory,
+        embed: `https://autoembed.cc/embed/player.php?id=${anilistId}&s=${episode}`,
+        subtitles: [],
+      }
+    );
+  }
+
   const rawSubtitles = [
     ...kaaSubtitles,
     ...(directStreams?.[0]?.subtitles || []),
@@ -607,7 +636,7 @@ export async function extractStreamSources(
       ? "kaa"
       : reanimeData && reanimeData.streams.length > 0
       ? "reanime"
-      : "auto";
+      : "embed";
 
   const result = {
     success: allStreams.length > 0,
@@ -624,10 +653,10 @@ export async function extractStreamSources(
     outro: { start: 0, end: 0 },
   };
 
-  if (kv) {
+  // Only cache positive results in KV so transient network glitches are not locked in
+  if (kv && allStreams.length > 0) {
     try {
-      const ttl = allStreams.length > 0 ? 1800 : 60;
-      await kv.put(cacheKey, JSON.stringify(result), { expirationTtl: ttl });
+      await kv.put(cacheKey, JSON.stringify(result), { expirationTtl: 1800 });
     } catch {}
   }
 

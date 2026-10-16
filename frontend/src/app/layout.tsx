@@ -33,6 +33,9 @@ export const metadata: Metadata = {
     siteName: SITE_CONFIG.name,
     type: "website",
   },
+  other: {
+    "darkreader-lock": "",
+  },
 };
 
 export default function RootLayout({
@@ -42,7 +45,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className={`${sansFont.variable} ${displayFont.variable} dark`}>
-      <body className="min-h-screen bg-[#0a0a0c] text-zinc-100 flex flex-col font-sans selection:bg-[var(--accent)] selection:text-white antialiased">
+      <head>
+        <meta name="darkreader-lock" />
+      </head>
+      <body suppressHydrationWarning className="min-h-screen bg-[#0a0a0c] text-zinc-100 flex flex-col font-sans selection:bg-[var(--accent)] selection:text-white antialiased">
         <Providers>
           <Navbar />
           <main className="flex-1 w-full relative z-10 overflow-x-clip">{children}</main>
