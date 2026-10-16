@@ -257,23 +257,62 @@ export function WatchHubClient({
   }, [dubAvailable]);
 
   // Fetch real stream from backend extraction engine
+  // Fetch real stream from backend extraction engine
   const fetchStream = useCallback(
     async (epNum: number, aud: "sub" | "dub", prov: string) => {
       setIsExtracting(true);
       setExtractError(null);
       try {
         const queryTitle = anime.title?.english || anime.title?.romaji || title;
-        const res = await api.extractEpisode(
+        let res = await api.extractEpisode(
           anime.id,
           epNum,
           aud,
           prov === "auto" ? undefined : prov,
           queryTitle
         );
+
+        // 1. If a specific provider returned 0 streams, automatically retry with "auto" (Fastest Race)
+        if ((!res?.streams || res.streams.length === 0) && prov !== "auto") {
+          console.warn(`[WatchHub] Provider "${prov}" returned 0 streams, auto-retrying with "auto" race...`);
+          const autoRes = await api.extractEpisode(
+            anime.id,
+            epNum,
+            aud,
+            undefined,
+            queryTitle
+          );
+          if (autoRes?.streams && autoRes.streams.length > 0) {
+            res = autoRes;
+            setProvider("auto");
+          }
+        }
+
+        // 2. If DUB was requested but returned 0 streams, auto-fallback to SUB with notification
+        if ((!res?.streams || res.streams.length === 0) && aud === "dub") {
+          console.warn("[WatchHub] DUB returned 0 streams, auto-switching to SUB...");
+          setDubAvailable(false);
+          setAudio("sub");
+          setDubNotification("English DUB is not available for this episode. Switched to SUB.");
+          setTimeout(() => setDubNotification(null), 5000);
+          const subRes = await api.extractEpisode(
+            anime.id,
+            epNum,
+            "sub",
+            undefined,
+            queryTitle
+          );
+          if (subRes?.streams && subRes.streams.length > 0) {
+            res = subRes;
+            setProvider("auto");
+          }
+        }
+
         setStreamResult(res);
-        if (aud === "dub") {
+        if (aud === "dub" && res?.streams && res.streams.length > 0) {
           setDubAvailable(true);
         }
+
         const hasDirectStream = res?.streams?.some((s: any) => s.type !== "embed");
         if (hasDirectStream) {
           setPlayerMode("stream");
@@ -291,6 +330,16 @@ export function WatchHubClient({
           setAudio("sub");
           setDubNotification("English DUB is not available for this episode. Switched to SUB.");
           setTimeout(() => setDubNotification(null), 5000);
+          // Auto-retry with sub
+          try {
+            const queryTitle = anime.title?.english || anime.title?.romaji || title;
+            const subRes = await api.extractEpisode(anime.id, epNum, "sub", undefined, queryTitle);
+            if (subRes?.streams?.length) {
+              setStreamResult(subRes);
+              setPlayerMode(subRes.streams.some((s: any) => s.type !== "embed") ? "stream" : "embed");
+              return;
+            }
+          } catch {}
           return;
         } else {
           setExtractError(
@@ -301,10 +350,16 @@ export function WatchHubClient({
         setIsExtracting(false);
       }
     },
-    [anime.id]
+    [anime.id, title, anime.title]
   );
 
   const handleTryNextServer = () => {
+    // If currently on an erroring specific server, first reset to "auto" (Fastest Race)
+    if (provider !== "auto") {
+      setProvider("auto");
+      fetchStream(currentEpNum, audio, "auto");
+      return;
+    }
     const currentIndex = EXTRACTION_PROVIDERS.findIndex((p) => p.id === provider);
     const nextIndex = (currentIndex + 1) % EXTRACTION_PROVIDERS.length;
     const nextProv = EXTRACTION_PROVIDERS[nextIndex].id;
@@ -501,21 +556,35 @@ export function WatchHubClient({
                   )}
                   {audio === "dub" ? (
                     <button
-                      onClick={() => setAudio("sub")}
+                      onClick={() => {
+                        setExtractError(null);
+                        setAudio("sub");
+                        setProvider("auto");
+                        fetchStream(currentEpNum, "sub", "auto");
+                      }}
                       className="rounded-md bg-rose-500/20 hover:bg-rose-500/30 px-2.5 py-1 font-bold text-white transition-colors"
                     >
                       Switch to SUB
                     </button>
                   ) : dubAvailable !== false ? (
                     <button
-                      onClick={() => setAudio("dub")}
+                      onClick={() => {
+                        setExtractError(null);
+                        setAudio("dub");
+                        setProvider("auto");
+                        fetchStream(currentEpNum, "dub", "auto");
+                      }}
                       className="rounded-md bg-rose-500/20 hover:bg-rose-500/30 px-2.5 py-1 font-bold text-white transition-colors"
                     >
                       Switch to DUB
                     </button>
                   ) : null}
                   <button
-                    onClick={() => fetchStream(currentEpNum, audio, provider)}
+                    onClick={() => {
+                      setExtractError(null);
+                      setProvider("auto");
+                      fetchStream(currentEpNum, audio, "auto");
+                    }}
                     className="flex items-center gap-1 rounded-md bg-white/10 hover:bg-white/20 px-2.5 py-1 font-semibold text-white transition-colors"
                   >
                     <RefreshCw className="h-3 w-3" />
