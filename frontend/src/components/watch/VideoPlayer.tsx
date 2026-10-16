@@ -311,17 +311,7 @@ export function VideoPlayer({
       }
     }
 
-    // 2. If all direct streams fail, seamlessly auto-switch to embed stream so video continues playing
-    const embedIdx = streams.findIndex((s) => s.type === "embed" || Boolean(s.embed));
-    if (embedIdx !== -1) {
-      console.log(`[VideoPlayer] Direct streams failed, auto-switching to embed ${embedIdx}`);
-      setSelectedStreamIdx(embedIdx);
-      setPlayerMode("embed");
-      setHasFatalError(false);
-      setIsBuffering(false);
-      return;
-    }
-
+    // 2. DO NOT silently force user into adblocker-broken embed. Show recovery options.
     console.warn("[VideoPlayer] Direct stream playback stalled. Showing recovery overlay.");
     setHasFatalError(true);
     setIsBuffering(false);
