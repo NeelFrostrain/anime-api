@@ -416,24 +416,41 @@ export function VideoPlayer({
     }
 
     const streamUrl = stream.url;
-    // If it's already a proxied URL, return it directly
+
+    // Direct Cloudflare Worker origin: avoids routing large media streams through Netlify serverless functions which return 429
+    const getWorkerBase = () => {
+      if (typeof window !== "undefined") {
+        const hostname = window.location.hostname;
+        if (hostname.includes("netlify.app") || hostname.includes("vercel.app") || process.env.NODE_ENV === "production") {
+          return "https://anime-api.neelofficial0812.workers.dev";
+        }
+      }
+      const envBack = process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/api\/v1\/?$/, "");
+      return envBack && !envBack.includes("127.0.0.1") && !envBack.includes("localhost")
+        ? envBack
+        : "https://anime-api.neelofficial0812.workers.dev";
+    };
+
+    const workerBase = getWorkerBase();
+
+    // If it's already a proxied URL, ensure it points directly to Cloudflare Worker to avoid Netlify function 429 rate limits
     if (streamUrl.startsWith("/proxy_m3u8") || streamUrl.includes("/proxy_m3u8")) {
-      return streamUrl;
+      return streamUrl.startsWith("/") ? `${workerBase}${streamUrl}` : streamUrl;
     }
 
     const targetUrl = (stream as any).rawUrl || streamUrl;
     const isM3U8 = targetUrl.includes(".m3u8") || stream.type === "hls" || stream.isM3U8;
 
     if (isM3U8) {
-      return `/proxy_m3u8?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(stream.referer || "")}&audio=${activeAudio}`;
+      return `${workerBase}/proxy_m3u8?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(stream.referer || "")}&audio=${activeAudio}`;
     }
 
     if (streamUrl.startsWith("/proxy_segment") || streamUrl.includes("/proxy_segment")) {
-      return streamUrl;
+      return streamUrl.startsWith("/") ? `${workerBase}${streamUrl}` : streamUrl;
     }
 
     if (targetUrl.startsWith("http://") || targetUrl.startsWith("https://")) {
-      return `/proxy_segment?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(stream.referer || "")}&audio=${activeAudio}`;
+      return `${workerBase}/proxy_segment?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(stream.referer || "")}&audio=${activeAudio}`;
     }
 
     return streamUrl;
@@ -986,7 +1003,7 @@ export function VideoPlayer({
   // Selected subtitle object
   const currentSub = subtitles.find((s) => s.url === selectedSubUrl);
   const proxiedSubtitleUrl = selectedSubUrl
-    ? `/proxy_subtitle?url=${encodeURIComponent(selectedSubUrl)}&offset=${subOffset}&speed=1.0`
+    ? `${typeof window !== "undefined" && (window.location.hostname.includes("netlify.app") || window.location.hostname.includes("vercel.app") || process.env.NODE_ENV === "production") ? "https://anime-api.neelofficial0812.workers.dev" : ""}/proxy_subtitle?url=${encodeURIComponent(selectedSubUrl)}&offset=${subOffset}&speed=1.0`
     : null;
 
   return (

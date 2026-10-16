@@ -389,7 +389,7 @@ export async function extractKaaStreams(
     }
 
     if (manifestUrl && !manifestUrl.includes("intro.mp4")) {
-      const proxiedUrl = `/proxy_m3u8?url=${encodeURIComponent(manifestUrl)}&referer=${encodeURIComponent("https://krussdomi.com/")}`;
+      const proxiedUrl = `https://anime-api.neelofficial0812.workers.dev/proxy_m3u8?url=${encodeURIComponent(manifestUrl)}&referer=${encodeURIComponent("https://krussdomi.com/")}`;
       streams.push({
         url: proxiedUrl,
         rawUrl: manifestUrl,
@@ -561,7 +561,7 @@ export async function extractStreamSources(
   const anilistId = Number(query);
   const targetCategory = audio === "dub" ? "dub" : "sub";
   const targetProvider = provider || "auto";
-  const cacheKey = `stream:v10:${anilistId}:${episode}:${targetCategory}:${targetProvider}`;
+  const cacheKey = `stream:v11:${anilistId}:${episode}:${targetCategory}:${targetProvider}`;
 
   if (kv) {
     try {
