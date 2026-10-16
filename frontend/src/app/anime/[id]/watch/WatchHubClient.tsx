@@ -261,7 +261,6 @@ export function WatchHubClient({
     async (epNum: number, aud: "sub" | "dub", prov: string) => {
       setIsExtracting(true);
       setExtractError(null);
-      setStreamResult(null);
       try {
         const res = await api.extractEpisode(
           anime.id,
@@ -331,6 +330,8 @@ export function WatchHubClient({
   // Update URL on episode change without unmounting or triggering route loading
   const selectEpisode = (epNum: number) => {
     setCurrentEpNum(epNum);
+    setPlayerMode("stream");
+    setExtractError(null);
     lastHistoryTimeRef.current = 0;
     lastHistoryEpRef.current = epNum;
     if (typeof window !== "undefined") {

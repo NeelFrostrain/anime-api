@@ -565,8 +565,13 @@ export function VideoPlayer({
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               netRetries++;
-              if (netRetries <= 1) {
-                hls.startLoad();
+              if (netRetries <= 3) {
+                console.warn(`[VideoPlayer] HLS network error, retrying (${netRetries}/3)...`);
+                setTimeout(() => {
+                  try {
+                    hls.startLoad();
+                  } catch {}
+                }, 800);
               } else {
                 hls.destroy();
                 handleAutoRecoverStream();
@@ -1220,6 +1225,8 @@ export function VideoPlayer({
               title={`${animeTitle} Episode ${episodeNumber}`}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
               allowFullScreen
+              sandbox="allow-same-origin allow-scripts allow-forms allow-presentation"
+              referrerPolicy="no-referrer"
               className="h-full w-full border-0"
             />
           </div>
@@ -1263,7 +1270,11 @@ export function VideoPlayer({
                 setDuration(e.currentTarget.duration || 0);
               }}
               onError={() => {
-                handleAutoRecoverStream();
+                const err = videoRef.current?.error;
+                // Don't trigger recovery on benign aborts or when source is being switched
+                if (err && err.code !== 1 && err.code !== 4) {
+                  handleAutoRecoverStream();
+                }
               }}
               onEnded={() => {
                 setIsPlaying(false);
