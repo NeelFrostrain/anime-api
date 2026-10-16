@@ -623,31 +623,7 @@ export async function extractStreamSources(
     allStreams.push(...reanimeData.streams);
   }
 
-  // Safe fallback embeds so the player is NEVER completely blank for any anime
-  if (allStreams.length === 0) {
-    allStreams.push(
-      {
-        url: `https://vidsrc.su/embed/anime/${anilistId}/${episode}`,
-        quality: "auto",
-        isM3U8: false,
-        server: "VidSrc (Backup)",
-        type: "embed",
-        audio: targetCategory,
-        embed: `https://vidsrc.su/embed/anime/${anilistId}/${episode}`,
-        subtitles: [],
-      },
-      {
-        url: `https://autoembed.cc/embed/player.php?id=${anilistId}&s=${episode}`,
-        quality: "auto",
-        isM3U8: false,
-        server: "AutoEmbed (Backup)",
-        type: "embed",
-        audio: targetCategory,
-        embed: `https://autoembed.cc/embed/player.php?id=${anilistId}&s=${episode}`,
-        subtitles: [],
-      }
-    );
-  }
+  // If no streams found, leave allStreams empty so UI shows clean server retry instead of broken ad-blocked embeds
 
   const rawSubtitles = [
     ...kaaSubtitles,
