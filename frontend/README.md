@@ -29,6 +29,17 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Deploy on Netlify
+
+Set the site's base directory to `frontend`. The `netlify.toml` in this
+directory configures the Next.js build, publishes `.next`, and enables the
+Netlify Next.js runtime for server-rendered pages, API routes, and rewrites.
+The publish directory is relative to the base directory.
+
+Deploy through the connected repository so Netlify builds the application and
+prepares its runtime. Publishing `public` or the source directory alone does
+not serve this application.
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
